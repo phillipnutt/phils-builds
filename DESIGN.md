@@ -81,6 +81,33 @@ mark, and Spent-stage names. Its example data uses Phil's own craft names.
 - Launcher classes from the rating: Light up to 5 t, Medium 5-20 t, Heavy 20-50 t, Super-heavy 50 t and up.
 - Spent stages: radial pieces are "Booster", in-line pieces "Stage 1, 2…", fairing halves "Fairing".
 
+## Built: 0.1 (2026-11-06, not yet tried in game)
+
+Phil approved the mockup ("Yes build this bad boy out"). What the first build does, and where it differs
+from the mockup:
+
+- **Load button** opens the library. The stock Subassemblies category in the parts list is hidden.
+- **Save button.** For a design in a family folder it saves over the open mark, the stock way (stock save
+  writes into the folder the craft was loaded from). For a design not in a family it opens the Save panel,
+  which also has "Save without filing". Ctrl+S is left stock.
+- **Save… in the library** opens Save the next mark for a filed design.
+- **Retiring is automatic:** older marks show as retired and still load. There's no "Retire this mark" link.
+- **Delete** moves the file to `saves/<save>/Deleted craft/` so it can be got back.
+- **Filing** an unfiled craft moves it into its family folder, renames it inside and copies its thumbnail.
+  Saving a loaded unfiled craft into a family moves the old unfiled copy to Deleted craft.
+- **Launcher re-rating:** a launcher whose name carries its code ("Oak 030") is renamed when its rating
+  changes ("Oak 060").
+- **Old-style subassemblies** like "Launch - Oak 030" are read as the Oak family, 30 t, when filed.
+- **Spent stages** use per-part vessel naming:
+  - Launcher parts are named at priority -1 as Debris.
+  - The payload gets the ship name at priority 1, with its category's vessel type, so the map icon matches.
+- **Not built yet:**
+  - Fairing halves keep the stock "<ship> Debris" name. They're made in flight, so naming them needs a
+    flight-scene hook.
+  - Flight numbers are still parked.
+
+Checks: `Tools/Test-Core.ps1` runs 67 checks on the naming rules; `Tools/Check-Names.ps1` checks the lists.
+
 ## Notes for building
 
 - KSP 1.12's craft browser has a folder tree (`KSP.UI.Screens.DirectoryController` exists). Confirm in game.
