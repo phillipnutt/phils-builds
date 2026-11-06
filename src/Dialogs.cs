@@ -112,7 +112,11 @@ namespace PhilsVesselNaming
                 fields.RemoveAll(f => f.Input == null);
                 foreach (Kit.Field f in fields) f.Refresh();
                 PerFrame();
-                if (Input.GetKeyDown(KeyCode.Escape) && !fields.Any(f => f.Focused)) Later(Close);
+                bool typing = fields.Any(f => f.Focused);
+                if (Input.GetKeyDown(KeyCode.Escape) && !typing) Later(Close);
+                // Enter presses the orange button, once no text box is being typed in.
+                if ((Input.GetKeyDown(KeyCode.Return) || Input.GetKeyDown(KeyCode.KeypadEnter)) && !typing &&
+                    primaryButton != null && primaryButton.Enabled && primaryAction != null) Later(primaryAction);
             }
             catch (Exception e)
             {
@@ -226,6 +230,9 @@ namespace PhilsVesselNaming
             popup = null;
         }
 
+        Btn primaryButton;
+        Action primaryAction;
+
         protected void FootButtons(string primary, Action save, bool enabled, string linkText = null, Action link = null)
         {
             if (linkText != null) Track(Kit.Link(foot, linkText, Pad, 17, 190, 30, () => Later(link), align: TextAnchor.MiddleLeft, size: 12));
@@ -233,6 +240,8 @@ namespace PhilsVesselNaming
             Btn p = Track(Kit.Primary(foot, primary, W - Pad - pw, 12, pw, 40, () => Later(save), 16));
             p.InkOff = Look.Fade(Look.AmberInk, 0.6f);
             SetEnabled(p, enabled);
+            primaryButton = p;
+            primaryAction = save;
             Track(Kit.Ghost(foot, "Cancel", W - Pad - pw - 10 - 92, 12, 92, 40, () => Later(Close), 14));
         }
 
@@ -505,7 +514,7 @@ namespace PhilsVesselNaming
     public class NextMarkDialog : Dialog
     {
         readonly string current, next;
-        bool asNext = true;
+        bool asNext;        // Save over is the usual case, so Save then Enter keeps working on the open mark
 
         public NextMarkDialog(VesselNamingEditor host, string family) : base(host)
         {
@@ -523,7 +532,7 @@ namespace PhilsVesselNaming
             Option(Pad, 18, half, $"Save over {Tail(current)}", $"Small fixes. It stays {current}.", !asNext, () => { asNext = false; Rebuild(); });
             Option(Pad + half + 10, 18, half, $"Save as {Tail(next)}", $"A new version, {next}. The older mark stays and still loads.", asNext, () => { asNext = true; Rebuild(); });
             Kit.Text(body, Pad, 132, W - 2 * Pad, 60,
-                "The stock Save button and Ctrl+S save over the open mark without asking. This opens from <b>Save…</b> in the library.", 12, Look.Ink2,
+                "Pick one and press Save (or Enter). Cancel saves nothing.", 12, Look.Ink2,
                 align: TextAnchor.UpperLeft);
         }
 
