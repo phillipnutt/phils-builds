@@ -270,14 +270,14 @@ namespace PhilsVesselNaming
         Kit.Field nameField;
         Btn saveButton;
 
-        public SavePanel(VesselNamingEditor host, CraftFile filing) : base(host)
+        public SavePanel(VesselNamingEditor host, CraftFile filing, string reason = null) : base(host)
         {
             this.filing = filing;
             cat = Category.ById(lastCategory) ?? Guess();
             if (filing != null && Marks.TryParse(filing.Name, out _, out MarkStyle s, out _)) style = s;
             Deal(true);
             Open(filing == null ? "Save a new design" : $"File {filing.Name}",
-                filing == null ? "This craft isn't in a family yet" : "Moves it into a family folder and names it to match", 640, 720);
+                filing == null ? reason ?? "This craft isn't in a family yet" : "Moves it into a family folder and names it to match", 640, 720);
         }
 
         string Facility => filing?.Facility ?? Stock.Facility;
@@ -291,7 +291,7 @@ namespace PhilsVesselNaming
             get
             {
                 if (!newFamily) return existing?.Name ?? "";
-                string n = Naming.Clean(name);
+                string n = Naming.FamilyPart(name);
                 if (cat.Id == "Hoppers" && n.Length > 0 && !n.StartsWith("X-"))
                 {
                     int next = Library.Families.Count(f => f.Category.Id == "Hoppers") + 1;
@@ -401,7 +401,7 @@ namespace PhilsVesselNaming
                 y += 48;
                 string theme = NameDecks.Theme(cat.Id);
                 int left = NameDecks.Unused(cat.Id, Library.UsedNames());
-                deckHint = Hint(y, $"From the {cat.Label} list{(theme.Length > 0 ? ", " + theme.ToLowerInvariant() : "")}. {left} name{(left == 1 ? "" : "s")} you haven't used yet. Or type your own." +
+                deckHint = Hint(y, $"From the {cat.Label} list{(theme.Length > 0 ? ", " + theme.ToLowerInvariant() : "")}. {left} name{(left == 1 ? "" : "s")} you haven't used yet. Or type your own; the mark is added for you." +
                                    (cat.Id == "Hoppers" ? " Test vehicles get an X-number." : ""));
                 y += 38;
             }
@@ -563,7 +563,7 @@ namespace PhilsVesselNaming
         static readonly SubKind[] Kinds = { SubKind.Launcher, SubKind.UpperStage, SubKind.Module, SubKind.Block };
         static readonly string[] KindLabels = { "Launcher", "Upper stage", "Module", "Building block" };
 
-        public SubDialog(VesselNamingEditor host, SubFile editing, Part held, SubKind kind) : base(host)
+        public SubDialog(VesselNamingEditor host, SubFile editing, Part held, SubKind kind, bool wholeCraft = false) : base(host)
         {
             this.editing = editing;
             this.held = held;
@@ -584,7 +584,7 @@ namespace PhilsVesselNaming
             else blockName = held?.partInfo?.title ?? "";
             if (family.Length == 0 && (this.kind == SubKind.Launcher || this.kind == SubKind.UpperStage)) Deal();
             string title = editing == null ? "Save a subassembly" : editing.Kind == SubKind.Unfiled ? $"File {editing.Name}" : $"Change {editing.Name}";
-            Open(title, editing == null ? $"{held?.partInfo?.title ?? "The held part"} and everything under it" : "Sets what it is and names it to match", 600, 600);
+            Open(title, editing != null ? "Sets what it is and names it to match" : wholeCraft ? "The whole craft in the editor" : $"{held?.partInfo?.title ?? "The held part"} and everything under it", 600, 660);
         }
 
         // Phil's old style: "Launch - Oak 030" means the Oak launcher, rated 30 t.
@@ -636,7 +636,7 @@ namespace PhilsVesselNaming
         {
             get
             {
-                string f = Naming.Clean(family);
+                string f = Naming.LauncherFamily(family);
                 switch (kind)
                 {
                     case SubKind.Launcher: return f.Length == 0 || tons <= 0 ? f : Naming.Launcher(f, tons, style, Mark);
@@ -774,7 +774,7 @@ namespace PhilsVesselNaming
             var info = new SubFile
             {
                 Kind = kind,
-                Family = kind == SubKind.Block ? "" : Naming.Clean(family),
+                Family = kind == SubKind.Block ? "" : kind == SubKind.Module ? Naming.Clean(family) : Naming.LauncherFamily(family),
                 Role = kind == SubKind.Module ? role : "",
                 Group = kind == SubKind.Block ? Naming.Clean(group) : "",
                 Rating = kind == SubKind.Launcher ? tons : 0,
@@ -828,7 +828,7 @@ namespace PhilsVesselNaming
         {
             if (preview == null) return;
             string n = Naming.Clean(name);
-            var examples = family.Craft.Take(3).Select(c => c.Name.StartsWith(family.Name, StringComparison.OrdinalIgnoreCase) ? n + c.Name.Substring(family.Name.Length) : c.Name);
+            var examples = family.Craft.Take(3).Select(c => Naming.SwapFamily(c.Name, family.Name, n));
             preview.text = "Becomes: " + string.Join(", ", examples) + (family.Craft.Count() > 3 ? "…" : "");
             string p = Problem();
             problem.text = p ?? "";

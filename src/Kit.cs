@@ -62,7 +62,7 @@ namespace PhilsVesselNaming
         {
             Color c = color ?? Look.Ink2;
             return Btn.Make(parent, label, x, y, w, h, onClick).Colors(c, c == Look.Ink2 ? Look.Ink : Look.AmberHover, c)
-                .WithLabel($"<u>{label}</u>", Look.Body, size, align: align);
+                .WithLabel(label, Look.Body, size, align: align);
         }
 
         // A pill that can be switched on (orange) or off (outlined).

@@ -45,7 +45,6 @@ namespace PhilsVesselNaming
         int builtVersion = -1;
         bool confirmDelete, confirmLoad;
         bool mergeAfterConfirm;
-        bool dropHot;
         RectTransform dropZone;
         Text dropText;
         Image dropBg;
@@ -856,25 +855,34 @@ namespace PhilsVesselNaming
             dropBg = Ui.Box(dropZone, Look.Round(Look.Panel2, Look.Line2, 8), raycast: true);
             Kit.Glyph(dropZone, 14, 12, 16, Look.Drop, Look.Ink2);
             dropText = Kit.Line(dropZone, 38, 0, MidW - 32 - 50, 40, text, 13, Look.Ink2);
+            // Holding a part: save that part and what hangs under it. Holding nothing:
+            // save the whole craft in the editor (a launcher built on its own, say).
             Kit.Clicks(dropZone, n =>
             {
+                SubKind kind = tab == Tab.Launchers ? SubKind.Launcher : SubKind.Block;
                 Part held = Stock.Held;
-                if (held != null) Later(() => host.OpenSubDialog(null, held, tab == Tab.Launchers ? SubKind.Launcher : SubKind.Block));
+                if (held != null) Later(() => host.OpenSubDialog(null, held, kind));
+                else if (EditorLogic.RootPart != null && Stock.Ship != null && Stock.Ship.parts.Count > 0)
+                    Later(() => host.OpenSubDialog(null, EditorLogic.RootPart, kind, wholeCraft: true));
             });
-            dropHot = false;
+            dropState = -1;
         }
+
+        int dropState = -1;
 
         void RefreshDrop()
         {
             if (dropZone == null) return;
-            bool hot = Stock.Held != null;
-            if (hot == dropHot) return;
-            dropHot = hot;
+            int state = Stock.Held != null ? 2 : EditorLogic.RootPart != null && Stock.Ship != null && Stock.Ship.parts.Count > 0 ? 1 : 0;
+            if (state == dropState) return;
+            dropState = state;
+            bool hot = state == 2;
             Ui.SetSprite(dropBg, hot ? Look.Round(Look.Wash(Look.Panel2, 0.15f), Look.Amber, 8) : Look.Round(Look.Panel2, Look.Line2, 8));
             dropText.color = hot ? Look.Amber : Look.Ink2;
-            if (hot) dropText.text = $"Click here to save {Stock.Held.partInfo?.title ?? "this part"} and everything under it";
-            else dropText.text = tab == Tab.Launchers ? "Drop a part here to save it, and everything under it, as a launcher"
-                : "Drop a part here to save it, and everything under it, as a module or block";
+            string what = tab == Tab.Launchers ? "a launcher" : "a module or block";
+            if (state == 2) dropText.text = $"Click here to save {Stock.Held.partInfo?.title ?? "this part"} and everything under it";
+            else if (state == 1) dropText.text = $"Click to save the whole craft as {what}, or pick up a part to save just that piece";
+            else dropText.text = $"Build something or pick up a part, then click here to save it as {what}";
         }
 
         // ---- The right column -------------------------------------------------------------------

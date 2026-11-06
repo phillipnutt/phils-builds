@@ -216,6 +216,37 @@ namespace PhilsVesselNaming
         }
 
         public static bool SameName(string a, string b) => string.Equals(a?.Trim(), b?.Trim(), StringComparison.OrdinalIgnoreCase);
+
+        // Whether a craft name belongs to a family: the family's name, then a space
+        // or nothing. "Orpheus II" belongs to Orpheus; "Orpheusly" doesn't.
+        public static bool InFamily(string name, string family) =>
+            !string.IsNullOrEmpty(family) && name != null &&
+            (SameName(name, family) || name.StartsWith(family.Trim() + " ", StringComparison.OrdinalIgnoreCase));
+
+        // A craft name with its family name swapped: "Orpheus I I" from "Orpheus I" to
+        // "Orpheus" gives "Orpheus I". Names outside the family stay as they are.
+        public static string SwapFamily(string name, string from, string to)
+        {
+            if (!InFamily(name, from)) return name;
+            return to.Trim() + name.Trim().Substring(from.Trim().Length);
+        }
+
+        // The family part of a typed launcher or stage name: a payload code and mark
+        // typed on the end are dropped ("Oak 030 II" -> "Oak").
+        public static string LauncherFamily(string typed)
+        {
+            string n = FamilyPart(typed);
+            Match m = Regex.Match(n, @"^(.*\S)\s+\d{3,4}$");
+            return m.Success ? m.Groups[1].Value : n;
+        }
+
+        // The family part of a typed name: a mark typed on the end is dropped, since
+        // the mod adds it ("Orpheus I" -> "Orpheus").
+        public static string FamilyPart(string typed)
+        {
+            string n = Clean(typed);
+            return Marks.TryParse(n, out string rest, out _, out _) && rest.Length > 0 ? rest : n;
+        }
     }
 
     public enum Group { Launch, Crewed, Uncrewed, Surface, AirSea }

@@ -67,6 +67,19 @@ static class CoreTests
         Is(Category.ByFolder("Relays and comsats")?.Id, "Relays", "category by folder");
         Is(Category.ByFolder("stations")?.Id, "Stations", "category by folder, any case");
 
+        // Phil typed "Orpheus I" as a family name and got "Orpheus I I".
+        Is(Naming.FamilyPart("Orpheus I"), "Orpheus", "typed mark dropped");
+        Is(Naming.FamilyPart("Orpheus"), "Orpheus", "plain family kept");
+        Is(Naming.FamilyPart("Magnolia Mk II"), "Magnolia", "typed Mk mark dropped");
+        Is(Naming.LauncherFamily("Oak 030"), "Oak", "typed payload code dropped");
+        Is(Naming.LauncherFamily("Oak 060 II"), "Oak", "typed code and mark dropped");
+        Is(Naming.LauncherFamily("Kata Tjuta"), "Kata Tjuta", "two-word launcher kept");
+        Is(Naming.InFamily("Orpheus II", "Orpheus"), true, "mark in family");
+        Is(Naming.InFamily("Orpheusly", "Orpheus"), false, "longer word not in family");
+        Is(Naming.SwapFamily("Orpheus I I", "Orpheus I", "Orpheus"), "Orpheus I", "rename family keeps mark");
+        Is(Naming.SwapFamily("Orpheus II", "Orpheus I", "Orpheus"), "Orpheus II", "rename doesn't cut into a numeral");
+        Is(Naming.SwapFamily("Haven Lab III", "Haven", "Harbor"), "Harbor Lab III", "rename with role");
+
         Console.WriteLine($"{passed} passed, {failed} failed");
         return failed == 0 ? 0 : 1;
     }

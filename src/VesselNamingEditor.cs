@@ -231,14 +231,24 @@ namespace PhilsVesselNaming
         {
             if (dialog != null) return;
             if (Stock.Ship == null || Stock.Ship.parts.Count == 0) { QuickSave(); return; }
-            if (CurrentFiling(out _, out _)) QuickSave();
-            else { Library.Scan(); Show(new SavePanel(this, null)); }
+            Library.Scan();
+            if (!CurrentFiling(out _, out string family)) Show(new SavePanel(this, null));
+            // A name typed in the box that isn't a mark of this family ("Orpheus" in the
+            // Orpheus I family) would save a stray file into the folder, so ask instead.
+            else if (!FitsFamily(Stock.ShipName, family))
+                Show(new SavePanel(this, null, $"\"{Stock.ShipName}\" isn't a mark of the {family} family, so where should it go?"));
+            else QuickSave();
         }
+
+        static bool FitsFamily(string name, string family) =>
+            Naming.InFamily(name, family) && Marks.TryParse(name, out string rest, out _, out _) && Naming.InFamily(rest, family);
 
         // The library's Save… button: the next mark for a filed design, or filing a new one.
         public void OpenSave()
         {
-            if (CurrentFiling(out _, out string family) && Stock.Ship != null && Stock.Ship.parts.Count > 0) Show(new NextMarkDialog(this, family));
+            Library.Scan();
+            if (CurrentFiling(out _, out string family) && Stock.Ship != null && Stock.Ship.parts.Count > 0 && FitsFamily(Stock.ShipName, family))
+                Show(new NextMarkDialog(this, family));
             else Show(new SavePanel(this, null));
         }
 
@@ -328,7 +338,7 @@ namespace PhilsVesselNaming
             string select = null;
             foreach (CraftFile c in f.Craft.ToList())
             {
-                string n = c.Name.StartsWith(f.Name, StringComparison.OrdinalIgnoreCase) ? newName + c.Name.Substring(f.Name.Length) : c.Name;
+                string n = Naming.SwapFamily(c.Name, f.Name, newName);
                 bool isCurrent = SamePath(c.Path, current);
                 string dest = Library.MoveCraft(c, folder, n);
                 if (isCurrent)
@@ -374,7 +384,8 @@ namespace PhilsVesselNaming
             }
         }
 
-        public void OpenSubDialog(SubFile existing, Part held, SubKind kind) => Show(new SubDialog(this, existing, held, kind));
+        public void OpenSubDialog(SubFile existing, Part held, SubKind kind, bool wholeCraft = false) =>
+            Show(new SubDialog(this, existing, held, kind, wholeCraft));
 
         public void SaveSub(SubFile editing, Part held, string name, SubFile info)
         {

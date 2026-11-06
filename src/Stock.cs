@@ -125,20 +125,29 @@ namespace PhilsVesselNaming
             }
         }
 
-        // Saves the held part and everything under it as a subassembly, the stock way.
+        // Saves the held part and everything under it as a subassembly. This is what
+        // the stock drop zone does (stage numbers taken relative to the craft's root
+        // part), without the stock list's own steps, which fail while it's hidden.
         public static bool SaveSubassembly(string name, string description, Part root)
         {
             try
             {
-                if (SubassemblyDropZone.Instance != null)
-                {
-                    SubassemblyDropZone.Instance.SaveSubassembly(name, description ?? "", root);
-                    return true;
-                }
                 var sc = new ShipConstruct(name, description ?? "", root);
-                ShipConstruction.SaveSubassembly(sc, name);
+                int offset = EditorLogic.RootPart != null ? EditorLogic.RootPart.inverseStage : 0;
+                // Stage numbers are shifted only for the file, then put back, so the
+                // craft in the editor keeps its staging (it may be the whole craft).
+                var stages = sc.parts.ToDictionary(p => p, p => p.inverseStage);
+                try
+                {
+                    foreach (Part p in sc.parts) p.inverseStage -= offset;
+                    ShipConstruction.SaveSubassembly(sc, name);
+                }
+                finally
+                {
+                    foreach (var kv in stages) if (kv.Key != null) kv.Key.inverseStage = kv.Value;
+                }
                 if (sc.vesselDeltaV != null) UnityEngine.Object.Destroy(sc.vesselDeltaV.gameObject);
-                EditorPartList.Instance?.RefreshSubassemblies();
+                try { EditorPartList.Instance?.RefreshSubassemblies(); } catch { }
                 return true;
             }
             catch (Exception ex)
