@@ -513,24 +513,46 @@ namespace PhilsVesselNaming
 
     public class NextMarkDialog : Dialog
     {
-        readonly string current, next;
+        readonly string current, next, newest;
         bool asNext;        // Save over is the usual case, so Save then Enter keeps working on the open mark
 
         public NextMarkDialog(VesselNamingEditor host, string family) : base(host)
         {
             current = Stock.ShipName;
-            if (Marks.TryParse(current, out string rest, out MarkStyle s, out int mark))
-                next = rest + " " + Marks.Format(Library.StyleOf(family, s), mark + 1);
-            else next = current + " " + Marks.Format(Library.StyleOf(family, MarkStyle.Roman), 2);
-            Open($"Save {(Marks.TryParse(current, out string r2, out _, out _) ? r2 : current)}",
-                Marks.TryParse(current, out _, out MarkStyle st, out int mk) ? $"You have Mark {Marks.Short(st, mk)} open. What did you make?" : "What did you make?", 560, 380);
+            bool marked = Marks.TryParse(current, out string rest, out MarkStyle s, out int mark);
+            if (!marked) { rest = current; mark = 1; }
+            MarkStyle style = Library.StyleOf(family, marked ? s : MarkStyle.Roman);
+            // The next mark comes after the newest one saved, not just after the open one:
+            // with Mark III open and a Mark IV on file, the next is Mark V.
+            string folder = Stock.SaveFolder;
+            int top = mark;
+            foreach (CraftFile c in Library.Craft)
+                if (c.Mark > top && Naming.SameName(c.Member, rest) && SameFolder(c.Path, folder))
+                {
+                    top = c.Mark;
+                    newest = c.Name;
+                }
+            next = rest + " " + Marks.Format(style, top + 1);
+            Open($"Save {rest}", marked ? $"You have Mark {Marks.Short(s, mark)} open. What did you make?" : "What did you make?", 560, 380);
+        }
+
+        static bool SameFolder(string file, string folder)
+        {
+            try
+            {
+                return folder != null && string.Equals(System.IO.Path.GetFullPath(System.IO.Path.GetDirectoryName(file)).TrimEnd('\\', '/'),
+                    System.IO.Path.GetFullPath(folder).TrimEnd('\\', '/'), StringComparison.OrdinalIgnoreCase);
+            }
+            catch { return false; }
         }
 
         protected override void BuildBody()
         {
             float half = (W - 2 * Pad - 10) / 2;
             Option(Pad, 18, half, $"Save over {Tail(current)}", $"Small fixes. It stays {current}.", !asNext, () => { asNext = false; Rebuild(); });
-            Option(Pad + half + 10, 18, half, $"Save as {Tail(next)}", $"A new version, {next}. The older mark stays and still loads.", asNext, () => { asNext = true; Rebuild(); });
+            Option(Pad + half + 10, 18, half, $"Save as {Tail(next)}",
+                newest != null ? $"A new version, {next}, after {newest}. Older marks stay and still load." : $"A new version, {next}. The older mark stays and still loads.",
+                asNext, () => { asNext = true; Rebuild(); });
             Kit.Text(body, Pad, 132, W - 2 * Pad, 60,
                 "Pick one and press Save (or Enter). Cancel saves nothing.", 12, Look.Ink2,
                 align: TextAnchor.UpperLeft);

@@ -241,8 +241,16 @@ namespace PhilsVesselNaming
             else Show(new NextMarkDialog(this, family));
         }
 
-        static bool FitsFamily(string name, string family) =>
-            Naming.InFamily(name, family) && Marks.TryParse(name, out string rest, out _, out _) && Naming.InFamily(rest, family);
+        // A name fits the open family when it's a mark of the family, or a mark of a
+        // member already saved in this folder (the folder's name can differ, like the
+        // "Orpheus I" folder holding Orpheus III).
+        static bool FitsFamily(string name, string family)
+        {
+            if (!Marks.TryParse(name, out string rest, out _, out _)) return false;
+            if (Naming.InFamily(rest, family)) return true;
+            string folder = Stock.SaveFolder;
+            return Library.Craft.Any(c => Naming.SameName(c.Member, rest) && c.Filed && SamePath(Path.GetDirectoryName(c.Path), folder));
+        }
 
         // The library's Save… button: the next mark for a filed design, or filing a new one.
         public void OpenSave()
