@@ -108,6 +108,15 @@ from the mockup:
 
 Checks: `Tools/Test-Core.ps1` runs 67 checks on the naming rules; `Tools/Check-Names.ps1` checks the lists.
 
+## Banked ideas (Phil's play-test thoughts, not decided)
+
+- **Merge holds a craft by its root part** (2026-11-06). A saved capsule with a heat shield below and a
+  parachute on top has no free attach node on its root, so a merged copy can't be attached.
+  - Stock workaround: drop it loose, use the Re-root tool on the heat shield, then pick it up again.
+  - Possible fix: Merge could offer to hold it by its bottom part and re-root by itself, the way the
+    Re-root tool does.
+  - Phil isn't sure it's worth it. Banked until he's shared more thoughts.
+
 ## Notes for building
 
 - KSP 1.12's craft browser has a folder tree (`KSP.UI.Screens.DirectoryController` exists). Confirm in game.
