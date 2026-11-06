@@ -237,7 +237,8 @@ namespace PhilsVesselNaming
             // Orpheus I family) would save a stray file into the folder, so ask instead.
             else if (!FitsFamily(Stock.ShipName, family))
                 Show(new SavePanel(this, null, $"\"{Stock.ShipName}\" isn't a mark of the {family} family, so where should it go?"));
-            else QuickSave();
+            // Phil: Save always asks, over the open mark or as the next one.
+            else Show(new NextMarkDialog(this, family));
         }
 
         static bool FitsFamily(string name, string family) =>

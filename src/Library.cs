@@ -148,7 +148,10 @@ namespace PhilsVesselNaming
             string[] parts = c.RelDir.Length == 0 ? new string[0] : c.RelDir.Split('/');
 
             Category cat = parts.Length >= 1 ? Category.ByFolder(parts[0]) : null;
-            if (cat != null && !cat.Subassembly && parts.Length <= 2)
+            // KSP writes "Auto-Saved Ship" into the save folder at every launch; it's
+            // never part of a family.
+            bool autoSave = string.Equals(c.Name, "Auto-Saved Ship", StringComparison.OrdinalIgnoreCase);
+            if (cat != null && !cat.Subassembly && parts.Length <= 2 && !autoSave)
             {
                 c.Category = cat;
                 c.Family = parts.Length == 2 ? parts[1] : null;
