@@ -22,9 +22,8 @@ namespace PhilsVesselNaming
     {
         public string Path, Facility, RelDir, Name;
         public Category Category;           // null when unfiled
-        public string Family;               // null when unfiled
-        public string Member;               // the name without its mark
-        public string Role = "";
+        public string Family;               // the name without its mark; null when unfiled
+        public string Base;                 // the name without its mark, filed or not
         public MarkStyle Style = MarkStyle.Roman;
         public int Mark;                    // 0 when the name has no mark
         public DateTime Written;
@@ -36,28 +35,23 @@ namespace PhilsVesselNaming
         public bool Filed => Category != null;
     }
 
-    public class Member
-    {
-        public string Name, Role = "";
-        public readonly List<CraftFile> Marks = new List<CraftFile>();   // oldest first
-        public CraftFile Newest => Marks.LastOrDefault();
-    }
-
+    // A family is one design line and its marks: Orpheus I, III, IV. A program
+    // built in pieces is several families sharing a name: Evergreen, Evergreen Lab.
     public class Family
     {
         public string Name;
         public Category Category;
         public string Facility;
-        public readonly List<Member> Members = new List<Member>();
-        public IEnumerable<CraftFile> Craft => Members.SelectMany(m => m.Marks);
-        public DateTime Newest => Craft.Select(c => c.Written).DefaultIfEmpty().Max();
+        public readonly List<CraftFile> Marks = new List<CraftFile>();    // oldest first
+        public CraftFile Newest => Marks.LastOrDefault();
+        public DateTime Written => Marks.Select(c => c.Written).DefaultIfEmpty().Max();
     }
 
     public class SubFile
     {
         public string Path, Name;
         public SubKind Kind = SubKind.Unfiled;
-        public string Family = "", Group = "", Role = "", Notes = "";
+        public string Family = "", Group = "", Notes = "";
         public float Rating, Width;         // launchers: tons to orbit, widest payload in meters
         public MarkStyle Style = MarkStyle.Roman;
         public int Mark = 1;
@@ -151,25 +145,15 @@ namespace PhilsVesselNaming
             // KSP writes "Auto-Saved Ship" into the save folder at every launch; it's
             // never part of a family.
             bool autoSave = string.Equals(c.Name, "Auto-Saved Ship", StringComparison.OrdinalIgnoreCase);
-            if (cat != null && !cat.Subassembly && parts.Length <= 2 && !autoSave)
-            {
-                c.Category = cat;
-                c.Family = parts.Length == 2 ? parts[1] : null;
-            }
+            if (cat != null && !cat.Subassembly && parts.Length <= 2 && !autoSave) c.Category = cat;
 
             bool hasMark = Marks.TryParse(c.Name, out string rest, out MarkStyle style, out int mark);
-            c.Member = hasMark ? rest : c.Name;
+            c.Base = hasMark ? rest : c.Name;
             c.Style = style;
             c.Mark = hasMark ? mark : 0;
-            if (c.Category != null && c.Family == null) c.Family = c.Member;    // a craft right in a category folder
-            if (c.Family != null)
-            {
-                if (c.Member.StartsWith(c.Family + " ", StringComparison.OrdinalIgnoreCase))
-                {
-                    string role = c.Member.Substring(c.Family.Length + 1).Trim();
-                    c.Role = role;
-                }
-            }
+            // The family is the name without its mark ("Orpheus IV" is Orpheus), whatever
+            // the folder inside the category is called.
+            if (c.Category != null) c.Family = c.Base;
             return c;
         }
 
@@ -180,27 +164,9 @@ namespace PhilsVesselNaming
             {
                 CraftFile first = g.First();
                 var f = new Family { Name = first.Family, Category = first.Category, Facility = first.Facility };
-                foreach (IGrouping<string, CraftFile> mg in g.GroupBy(c => c.Member, StringComparer.OrdinalIgnoreCase))
-                {
-                    var m = new Member { Name = mg.First().Member, Role = mg.First().Role };
-                    m.Marks.AddRange(mg.OrderBy(c => c.Mark).ThenBy(c => c.Written));
-                    f.Members.Add(m);
-                }
-                // The family's own member first, then roles in the usual order, then the rest.
-                f.Members.Sort((a, b) =>
-                {
-                    int ra = RoleOrder(a.Role), rb = RoleOrder(b.Role);
-                    return ra != rb ? ra.CompareTo(rb) : string.Compare(a.Name, b.Name, StringComparison.OrdinalIgnoreCase);
-                });
+                f.Marks.AddRange(g.OrderBy(c => c.Mark).ThenBy(c => c.Written));
                 Families.Add(f);
             }
-        }
-
-        static int RoleOrder(string role)
-        {
-            if (string.IsNullOrEmpty(role)) return -1;
-            int i = Array.FindIndex(Roles.All, r => r.Equals(role, StringComparison.OrdinalIgnoreCase));
-            return i >= 0 ? i : 100;
         }
 
         static SubFile ReadSub(string file)
@@ -213,10 +179,12 @@ namespace PhilsVesselNaming
             };
             if (subNodes.TryGetValue(s.Name, out ConfigNode n))
             {
-                if (Enum.TryParse(n.GetValue("kind") ?? "", out SubKind kind)) s.Kind = kind;
+                string k = n.GetValue("kind") ?? "";
+                if (k == "Module") k = "Block";             // modules and blocks became one kind
+                if (Enum.TryParse(k, out SubKind kind)) s.Kind = kind;
                 s.Family = n.GetValue("family") ?? "";
                 s.Group = n.GetValue("group") ?? "";
-                s.Role = n.GetValue("role") ?? "";
+                if (s.Kind == SubKind.Block && s.Group.Length == 0) s.Group = s.Family;
                 s.Notes = n.GetValue("notes") ?? "";
                 s.Rating = Float(n.GetValue("rating"));
                 s.Width = Float(n.GetValue("width"));
@@ -330,7 +298,7 @@ namespace PhilsVesselNaming
         {
             var used = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             foreach (Family f in Families) used.Add(f.Name);
-            foreach (CraftFile c in Craft) { used.Add(c.Member); if (c.Family != null) used.Add(c.Family); }
+            foreach (CraftFile c in Craft) used.Add(c.Base);
             foreach (SubFile s in Subs)
             {
                 if (!string.IsNullOrEmpty(s.Family)) used.Add(s.Family);
@@ -351,7 +319,6 @@ namespace PhilsVesselNaming
             c == null || !c.Filed ? null : Families.FirstOrDefault(f => f.Category == c.Category && f.Facility == c.Facility &&
                                                                          string.Equals(f.Name, c.Family, StringComparison.OrdinalIgnoreCase));
 
-        public static Member MemberOf(CraftFile c) => FamilyOf(c)?.Members.FirstOrDefault(m => m.Marks.Contains(c));
 
         public static SubFile SubNamed(string name) => Subs.FirstOrDefault(s => Naming.SameName(s.Name, name));
 
@@ -424,7 +391,6 @@ namespace PhilsVesselNaming
                     c.AddValue("kind", s.Kind.ToString());
                     if (s.Family.Length > 0) c.AddValue("family", s.Family);
                     if (s.Group.Length > 0) c.AddValue("group", s.Group);
-                    if (s.Role.Length > 0) c.AddValue("role", s.Role);
                     if (s.Kind == SubKind.Launcher || s.Kind == SubKind.UpperStage)
                     {
                         c.AddValue("style", s.Style.ToString());

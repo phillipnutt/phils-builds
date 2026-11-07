@@ -273,7 +273,6 @@ namespace PhilsVesselNaming
         string name = "";
         bool nameTyped;
         int cursor;
-        string role = "";
         MarkStyle style = MarkStyle.Roman;
         Text previewName, previewWhere, previewPath, problem, deckHint;
         Kit.Field nameField;
@@ -284,7 +283,24 @@ namespace PhilsVesselNaming
             this.filing = filing;
             cat = Category.ById(lastCategory) ?? Guess();
             if (filing != null && Marks.TryParse(filing.Name, out _, out MarkStyle s, out _)) style = s;
-            Deal(true);
+            // A name already typed in KSP's name box (or the old craft's own name) is
+            // used, mark and all, and if a family of that name exists this adds to it.
+            // Only a craft still called "Untitled Space Craft" gets a dealt name.
+            string typed = filing != null ? filing.Base : Stock.ShipName;
+            if (!string.IsNullOrEmpty(typed) && !IsDefault(typed))
+            {
+                string fam = Naming.FamilyPart(typed);
+                Family match = Library.Families.FirstOrDefault(f => f.Facility == Facility && Naming.SameName(f.Name, fam));
+                if (match != null)
+                {
+                    cat = match.Category;
+                    existing = match;
+                    newFamily = false;
+                }
+                name = fam;
+                nameTyped = true;
+            }
+            else Deal(true);
             Open(filing == null ? "Save a new design" : $"File {filing.Name}",
                 filing == null ? reason ?? "This craft isn't in a family yet" : "Moves it into a family folder and names it to match", 640, 720);
         }
@@ -292,6 +308,10 @@ namespace PhilsVesselNaming
         string Facility => filing?.Facility ?? Stock.Facility;
 
         static Category Guess() => Category.ById(Stock.Facility == "SPH" ? "Spaceplanes" : "Probes");
+
+        static bool IsDefault(string n) =>
+            Naming.SameName(n, "Untitled Space Craft") || Naming.SameName(n, "Auto-Saved Ship") ||
+            Naming.SameName(n, EditorLogic.autoShipName);
 
         List<Family> FamiliesHere => Library.Families.Where(f => f.Category == cat && f.Facility == Facility).OrderBy(f => f.Name).ToList();
 
@@ -310,22 +330,11 @@ namespace PhilsVesselNaming
             }
         }
 
-        MarkStyle Style => newFamily ? style : Library.StyleOf(existing?.Name, existing?.Members.SelectMany(m => m.Marks).FirstOrDefault(c => c.Mark > 0)?.Style ?? style);
+        MarkStyle Style => newFamily ? style : Library.StyleOf(existing?.Name, existing?.Marks.FirstOrDefault(c => c.Mark > 0)?.Style ?? style);
 
-        int NextMark
-        {
-            get
-            {
-                if (newFamily || existing == null) return 1;
-                string member = MemberName;
-                Member m = existing.Members.FirstOrDefault(x => Naming.SameName(x.Name, member));
-                return m == null ? 1 : m.Marks.Max(c => c.Mark) + 1;
-            }
-        }
+        int NextMark => newFamily || existing == null || existing.Marks.Count == 0 ? 1 : existing.Marks.Max(c => c.Mark) + 1;
 
-        string MemberName => string.IsNullOrEmpty(role) ? FamilyName : FamilyName + " " + role;
-
-        string FinalName => FamilyName.Length == 0 ? "" : Naming.Craft(FamilyName, role, Style, NextMark);
+        string FinalName => FamilyName.Length == 0 ? "" : Naming.Craft(FamilyName, "", Style, NextMark);
 
         string Folder => FamilyName.Length == 0 ? "" : Library.FolderFor(Facility, cat, FamilyName);
 
@@ -420,11 +429,6 @@ namespace PhilsVesselNaming
                 Kit.Line(body, Pad + 12, y, W - 2 * Pad - 24, 42, existing?.Name ?? "", 19, Look.Ink, Look.Display, style: FontStyle.Bold);
                 y += 50;
             }
-
-            y = Label(y, "Role in the family", "(optional)");
-            string[] roles = new[] { "None" }.Concat(Roles.All).ToArray();
-            int ri = string.IsNullOrEmpty(role) ? 0 : Array.FindIndex(roles, r => r == role);
-            y = Chips(y, roles, ri, i => { role = i == 0 ? "" : roles[i]; Rebuild(); });
 
             if (newFamily)
             {
@@ -527,7 +531,7 @@ namespace PhilsVesselNaming
             string folder = Stock.SaveFolder;
             int top = mark;
             foreach (CraftFile c in Library.Craft)
-                if (c.Mark > top && Naming.SameName(c.Member, rest) && SameFolder(c.Path, folder))
+                if (c.Mark > top && Naming.SameName(c.Base, rest) && (SameFolder(c.Path, folder) || c.Filed && c.Facility == Stock.Facility))
                 {
                     top = c.Mark;
                     newest = c.Name;
@@ -583,7 +587,7 @@ namespace PhilsVesselNaming
         readonly Part held;                 // or the part to save, held on the cursor
         SubKind kind;
         float tons, width;
-        string notes = "", family = "", role = "", group = "", blockName = "";
+        string notes = "", family = "", group = "", blockName = "";
         bool nameTyped;
         int cursor;
         MarkStyle style = MarkStyle.Roman;
@@ -591,8 +595,8 @@ namespace PhilsVesselNaming
         Kit.Field familyField;
         Btn saveButton;
 
-        static readonly SubKind[] Kinds = { SubKind.Launcher, SubKind.UpperStage, SubKind.Module, SubKind.Block };
-        static readonly string[] KindLabels = { "Launcher", "Upper stage", "Module", "Building block" };
+        static readonly SubKind[] Kinds = { SubKind.Launcher, SubKind.UpperStage, SubKind.Block };
+        static readonly string[] KindLabels = { "Launcher", "Upper stage", "Module or block" };
 
         public SubDialog(VesselNamingEditor host, SubFile editing, Part held, SubKind kind, bool wholeCraft = false) : base(host)
         {
@@ -605,14 +609,13 @@ namespace PhilsVesselNaming
                 width = editing.Width;
                 notes = editing.Notes;
                 family = editing.Family;
-                role = editing.Role;
                 group = editing.Group;
                 style = editing.Style;
                 blockName = editing.Name;
                 nameTyped = family.Length > 0;
                 if (editing.Kind == SubKind.Unfiled) GuessFromName(editing.Name);
             }
-            else blockName = held?.partInfo?.title ?? "";
+            else blockName = wholeCraft ? Stock.ShipName : held?.partInfo?.title ?? "";
             if (family.Length == 0 && (this.kind == SubKind.Launcher || this.kind == SubKind.UpperStage)) Deal();
             string title = editing == null ? "Save a subassembly" : editing.Kind == SubKind.Unfiled ? $"File {editing.Name}" : $"Change {editing.Name}";
             Open(title, editing != null ? "Sets what it is and names it to match" : wholeCraft ? "The whole craft in the editor" : $"{held?.partInfo?.title ?? "The held part"} and everything under it", 600, 660);
@@ -672,7 +675,6 @@ namespace PhilsVesselNaming
                 {
                     case SubKind.Launcher: return f.Length == 0 || tons <= 0 ? f : Naming.Launcher(f, tons, style, Mark);
                     case SubKind.UpperStage: return f.Length == 0 ? "" : Naming.Stage(f, style, Mark);
-                    case SubKind.Module: return f.Length == 0 ? "" : string.IsNullOrEmpty(role) ? f : f + " " + role;
                     default: return Naming.Clean(blockName);
                 }
             }
@@ -739,27 +741,13 @@ namespace PhilsVesselNaming
                 y = Label(y, "Mark numbering");
                 y = Segments(y, Marks.Styles.Select(Marks.StyleLabel).ToArray(), Array.IndexOf(Marks.Styles, style), i => { style = Marks.Styles[i]; Rebuild(); });
             }
-            else if (kind == SubKind.Module)
-            {
-                y = Label(y, "Family");
-                List<string> fams = Library.Families.Select(f => f.Name).Concat(Library.Subs.Where(s => s.Kind == SubKind.Module).Select(s => s.Family))
-                    .Where(n => !string.IsNullOrEmpty(n)).Distinct(StringComparer.OrdinalIgnoreCase).OrderBy(n => n).ToList();
-                familyField = Kit.Input(body, Pad, y, W - 2 * Pad - (fams.Count > 0 ? 150 : 0), 42, family, "The family it belongs to", v => { family = v; RefreshPreview(); },
-                    size: 19, font: Look.Display, padLeft: 12, limit: 40);
-                fields.Add(familyField);
-                if (fams.Count > 0) Select(y + 3, "Pick…", null, fams, i => { family = fams[i]; Rebuild(); }, W - Pad - 142, 142);
-                y += 50;
-                y = Label(y, "Role");
-                int ri = Array.FindIndex(Roles.All, r => r == role);
-                y = Chips(y, Roles.All, ri, i => { role = Roles.All[i]; Rebuild(); });
-            }
             else
             {
                 y = Label(y, "Name");
-                fields.Add(Kit.Input(body, Pad, y, W - 2 * Pad, 42, blockName, "What it is, with its size", v => { blockName = v; RefreshPreview(); },
+                fields.Add(Kit.Input(body, Pad, y, W - 2 * Pad, 42, blockName, "What it is: DESU Drive, Control 1.25 Top…", v => { blockName = v; RefreshPreview(); },
                     size: 17, font: Look.Display, padLeft: 12, limit: 50));
                 y += 50;
-                y = Label(y, "Group", "(Control, Power, Ground support…)");
+                y = Label(y, "Group", "(a program like DESU, or a job like Control or Power)");
                 List<string> groups = Library.Subs.Where(s => s.Kind == SubKind.Block && s.Group.Length > 0).Select(s => s.Group)
                     .Distinct(StringComparer.OrdinalIgnoreCase).OrderBy(n => n).ToList();
                 fields.Add(Kit.Input(body, Pad, y, W - 2 * Pad - (groups.Count > 0 ? 150 : 0), 38, group, "Group", v => group = v, limit: 30));
@@ -805,8 +793,7 @@ namespace PhilsVesselNaming
             var info = new SubFile
             {
                 Kind = kind,
-                Family = kind == SubKind.Block ? "" : kind == SubKind.Module ? Naming.Clean(family) : Naming.LauncherFamily(family),
-                Role = kind == SubKind.Module ? role : "",
+                Family = kind == SubKind.Block ? "" : Naming.LauncherFamily(family),
                 Group = kind == SubKind.Block ? Naming.Clean(group) : "",
                 Rating = kind == SubKind.Launcher ? tons : 0,
                 Width = kind == SubKind.Launcher ? width : 0,
@@ -859,8 +846,8 @@ namespace PhilsVesselNaming
         {
             if (preview == null) return;
             string n = Naming.Clean(name);
-            var examples = family.Craft.Take(3).Select(c => Naming.SwapFamily(c.Name, family.Name, n));
-            preview.text = "Becomes: " + string.Join(", ", examples) + (family.Craft.Count() > 3 ? "…" : "");
+            var examples = family.Marks.Take(3).Select(c => Naming.SwapFamily(c.Name, family.Name, n));
+            preview.text = "Becomes: " + string.Join(", ", examples) + (family.Marks.Count() > 3 ? "…" : "");
             string p = Problem();
             problem.text = p ?? "";
             SetEnabled(saveButton, p == null);

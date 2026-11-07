@@ -317,11 +317,7 @@ namespace PhilsVesselNaming
         }
     }
 
-    // What a subassembly is, in the library.
-    public enum SubKind { Unfiled, Launcher, UpperStage, Module, Block }
-
-    public static class Roles
-    {
-        public static readonly string[] All = { "Core", "Lab", "Hab", "Pod", "Service", "Drive", "Lander", "Tank", "Node" };
-    }
+    // What a subassembly is, in the library. Block covers modules and building
+    // blocks alike: anything with a name and a group (DESU, Control, Power…).
+    public enum SubKind { Unfiled, Launcher, UpperStage, Block }
 }

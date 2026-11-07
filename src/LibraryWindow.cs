@@ -328,20 +328,10 @@ namespace PhilsVesselNaming
         {
             List<SubFile> subs = Library.Subs.Where(s => s.Kind != SubKind.Launcher && s.Kind != SubKind.UpperStage).ToList();
             RailItem("All subassemblies", null, subs.Count, subFilter == AllKey, () => { subFilter = AllKey; RebuildAll(); }, 26, bold: true);
-            List<string> modules = subs.Where(s => s.Kind == SubKind.Module).Select(s => s.Family).Distinct(StringComparer.OrdinalIgnoreCase).OrderBy(x => x).ToList();
-            if (modules.Count > 0)
-            {
-                RailHead("Modules");
-                foreach (string m in modules)
-                {
-                    string key = "m:" + m;
-                    RailItem(m, null, subs.Count(s => s.Kind == SubKind.Module && Naming.SameName(s.Family, m)), subFilter == key, () => { subFilter = key; RebuildAll(); });
-                }
-            }
             List<string> groups = subs.Where(s => s.Kind == SubKind.Block).Select(s => GroupOf(s)).Distinct(StringComparer.OrdinalIgnoreCase).OrderBy(x => x).ToList();
             if (groups.Count > 0)
             {
-                RailHead("Building blocks");
+                RailHead("Groups");
                 foreach (string g in groups)
                 {
                     string key = "b:" + g;
@@ -354,7 +344,7 @@ namespace PhilsVesselNaming
             int unfiled = subs.Count(s => s.Kind == SubKind.Unfiled);
             RailItem("Unfiled", null, unfiled, subFilter == UnfiledKey, () => { subFilter = UnfiledKey; RebuildAll(); }, warn: unfiled > 0);
             Kit.Text(rail, 16, H - TitleH - 76, RailW - 30, 64,
-                "Modules are pieces of a family. Building blocks are the handy bits you reuse everywhere.", 12, Look.Ink2, align: TextAnchor.LowerLeft);
+                "Each one has a group you choose: a program like DESU, or a job like Control or Power.", 12, Look.Ink2, align: TextAnchor.LowerLeft);
         }
 
         static string GroupOf(SubFile s) => string.IsNullOrEmpty(s.Group) ? "Other" : s.Group;
@@ -470,21 +460,21 @@ namespace PhilsVesselNaming
             }
 
             IEnumerable<Family> fams = Library.Families.Where(f => craftFilter == AllKey || f.Category.Id == craftFilter);
-            if (q.Length > 0) fams = fams.Where(f => Has(f.Name, q) || f.Members.Any(m => Has(m.Name, q)));
+            if (q.Length > 0) fams = fams.Where(f => Has(f.Name, q));
             List<Family> families = SortFamilies(fams).ToList();
             if (families.Count == 0)
                 Empty(content, "Nothing here", q.Length > 0 ? "No families match that search." : "Save a design to start a family here.");
-            foreach (Family f in families) y = FamilyCard(content, f, 16, y, w, q) + 10;
+            foreach (Family f in families) y = FamilyRow(content, f, 16, y, w) + 7;
 
             if (families.Count > 0)
             {
                 // The key to the mark buttons.
-                RectTransform key = Ui.Node(content, "Key").At(16, y, w, 22);
+                RectTransform key = Ui.Node(content, "Key").At(16, y + 3, w, 22);
                 MarkChip(key, 0, 1, "II", false, false, null, small: true);
                 Kit.Line(key, 30, 0, 110, 20, "newest mark", 12, Look.Ink2);
                 MarkChip(key, 130, 1, "I", true, false, null, small: true);
-                Kit.Line(key, 160, 0, 160, 20, "retired, still loads", 12, Look.Ink2);
-                y += 28;
+                Kit.Line(key, 160, 0, 160, 20, "older, still loads", 12, Look.Ink2);
+                y += 31;
             }
             scroller.SetHeight(y + 8);
         }
@@ -493,9 +483,10 @@ namespace PhilsVesselNaming
         {
             switch (sort)
             {
-                case Sort.Recent: return fams.OrderByDescending(f => f.Newest);
-                case Sort.Mass: return fams.OrderBy(f => f.Members.Max(m => { Library.LoadStats(m.Newest); return m.Newest.Mass; }));
-                case Sort.Cost: return fams.OrderBy(f => f.Members.Max(m => { Library.LoadStats(m.Newest); return m.Newest.Cost; }));
+                case Sort.Recent: return fams.OrderByDescending(f => f.Written);
+                case Sort.Mass: return fams.OrderBy(f => { Library.LoadStats(f.Newest); return f.Newest.Mass; });
+                case Sort.Cost: return fams.OrderBy(f => { Library.LoadStats(f.Newest); return f.Newest.Cost; });
+                // A to Z, so a program's pieces (Evergreen, Evergreen Lab…) sit together.
                 default: return fams.OrderBy(f => f.Category.Label).ThenBy(f => f.Name, StringComparer.OrdinalIgnoreCase);
             }
         }
@@ -508,46 +499,15 @@ namespace PhilsVesselNaming
                 $"<size=18><b><color={Look.Html(Look.Ink2)}>{title}</color></b></size>\n{text}", 14, Look.Ink3, align: TextAnchor.MiddleCenter);
         }
 
-        float FamilyCard(RectTransform content, Family f, float x, float y, float w, string q)
+        // One family, one row: its picture, name and numbers, and its marks on the right.
+        float FamilyRow(RectTransform content, Family f, float x, float y, float w)
         {
-            string key = f.Facility + "|" + f.Category.Id + "|" + f.Name;
-            bool open = !collapsed.Contains(key) || q.Length > 0;
-            List<Member> members = q.Length > 0 && !Has(f.Name, q) ? f.Members.Where(m => Has(m.Name, q)).ToList() : f.Members;
-            const float headH = 52, rowH = 56;
-            float h = headH + (open ? members.Count * rowH : 0);
-            RectTransform card = Kit.Panel(content, f.Name, x, y, w, h, Look.Rail, Look.Line, 9);
-            Ui.Slab(card, "Head", 1, 1, w - 2, headH - 1, Look.Panel2, 8, open ? Ui.Corners.Top : Ui.Corners.All);
-            RectTransform head = Ui.Node(card, "HeadClick").At(0, 0, w, headH);
-            Kit.Clicks(head, n => Later(() => { if (!collapsed.Remove(key)) collapsed.Add(key); RebuildList(); }));
-            Kit.Glyph(card, 12, 19, 14, open ? Look.ChevronDown : Look.ChevronRight, Look.Ink2);
-            Kit.Line(card, 34, 7, w - 120, 24, f.Name, 18, Look.Ink, Look.Display, style: FontStyle.Bold);
-            int craftCount = f.Craft.Count();
-            string facility = f.Facility == "SPH" ? " · SPH" : "";
-            Kit.Line(card, 34, 29, w - 50, 16,
-                $"{f.Category.Label} · {f.Members.Count} member{(f.Members.Count == 1 ? "" : "s")} · {craftCount} craft{facility}", 12, Look.Ink2);
-            if (!open) return y + h;
-
-            float ry = headH;
-            foreach (Member m in members)
-            {
-                MemberRow(card, m, f, ry, w);
-                ry += rowH;
-            }
-            return y + h;
-        }
-
-        void MemberRow(RectTransform card, Member m, Family f, float y, float w)
-        {
+            const float h = 60;
             CraftFile sel = SelCraft;
-            bool selected = sel != null && m.Marks.Contains(sel);
-            RectTransform row = Ui.Node(card, m.Name).At(1, y, w - 2, 56);
-            Ui.Solid(Ui.Node(row, "Line").At(0, 0, w - 2, 1), Color.Lerp(Look.Rail, Look.Line, 0.6f));
-            if (selected)
-            {
-                Ui.Solid(Ui.Node(row, "Sel").At(0, 1, w - 2, 55), Look.Wash(Look.Rail, 0.08f));
-                Ui.Solid(Ui.Node(row, "Bar").At(0, 1, 3, 55), Look.Amber);
-            }
-            CraftFile newest = m.Newest;
+            bool selected = sel != null && f.Marks.Contains(sel);
+            CraftFile newest = f.Newest;
+            RectTransform row = Kit.Panel(content, f.Name, x, y, w, h, selected ? Look.Wash(Look.Rail, 0.08f) : Look.Rail,
+                selected ? Look.Amber : Look.Line, 9);
             Kit.Clicks(row, n => Later(() =>
             {
                 if (n >= 2) { selectedCraftPath = newest.Path; host.LoadCraft(newest, false); return; }
@@ -557,25 +517,26 @@ namespace PhilsVesselNaming
                 RebuildDetail();
             }));
 
-            Thumb(row, newest, 12, 8, 44, 40);
+            Thumb(row, newest, 10, 8, 48, 44);
             Library.LoadStats(newest);
             CraftNote note = Library.NoteFor(newest);
             var bits = new List<string>();
-            if (!string.IsNullOrEmpty(m.Role)) bits.Add(m.Role);
+            if (craftFilter == AllKey) bits.Add(f.Category.Label);
             if (newest.Mass > 0) bits.Add(Naming.Tons(note != null && note.Payload > 0 ? note.Payload : newest.Mass));
             if (note != null && note.Launcher.Length > 0) bits.Add("on " + note.Launcher);
-            Kit.Line(row, 67, 9, w - 67 - 12 - 40 * Math.Min(4, m.Marks.Count), 20, m.Name, 14, Look.Ink, style: FontStyle.Bold);
-            Kit.Line(row, 67, 29, w - 67 - 12 - 40 * Math.Min(4, m.Marks.Count), 18, string.Join(" · ", bits), 12, Look.Ink2);
+            if (f.Facility == "SPH") bits.Add("SPH");
 
-            // Mark buttons, newest on the right; up to five, then older ones are left off.
-            List<CraftFile> marks = m.Marks.Skip(Math.Max(0, m.Marks.Count - 5)).ToList();
+            // Mark buttons, newest on the right; the five newest are shown.
+            List<CraftFile> marks = f.Marks.Skip(Math.Max(0, f.Marks.Count - 5)).ToList();
+            float textW = w - 70 - 12 - marks.Count * 36;
+            Kit.Line(row, 70, 9, textW, 24, f.Name, 17, Look.Ink, Look.Display, style: FontStyle.Bold);
+            Kit.Line(row, 70, 33, textW, 18, string.Join(" · ", bits), 12, Look.Ink2);
             float mx = w - 12 - marks.Count * 36 + 4;
             foreach (CraftFile c in marks)
             {
-                bool isNewest = c == newest;
                 CraftFile pick = c;
                 string label = c.Mark > 0 ? Marks.Short(c.Style, c.Mark) : "—";
-                MarkChip(row, mx, 16, label, !isNewest, sel == c, () => Later(() =>
+                MarkChip(row, mx, 18, label, c != newest, sel == c, () => Later(() =>
                 {
                     selectedCraftPath = pick.Path;
                     confirmDelete = confirmLoad = false;
@@ -584,8 +545,8 @@ namespace PhilsVesselNaming
                 }));
                 mx += 36;
             }
+            return y + h;
         }
-
         void MarkChip(RectTransform parent, float x, float y, string label, bool old, bool selected, Action click, bool small = false)
         {
             float w = small ? 24 : 32, h = small ? 20 : 24;
@@ -787,7 +748,6 @@ namespace PhilsVesselNaming
         {
             IEnumerable<SubFile> subs = Library.Subs.Where(s => s.Kind != SubKind.Launcher && s.Kind != SubKind.UpperStage);
             if (subFilter == UnfiledKey) subs = subs.Where(s => s.Kind == SubKind.Unfiled);
-            else if (subFilter != null && subFilter.StartsWith("m:")) subs = subs.Where(s => s.Kind == SubKind.Module && Naming.SameName(s.Family, subFilter.Substring(2)));
             else if (subFilter != null && subFilter.StartsWith("b:")) subs = subs.Where(s => s.Kind == SubKind.Block && Naming.SameName(GroupOf(s), subFilter.Substring(2)));
             if (search && subSearch.Trim().Length > 0) subs = subs.Where(s => Has(s.Name, subSearch.Trim()));
             return subs;
@@ -801,10 +761,8 @@ namespace PhilsVesselNaming
             if (subs.Count == 0) Empty(content, "Nothing here", subSearch.Trim().Length > 0 ? "Nothing matches that search." : "Drop a part on the box below to save one.");
 
             var sections = new List<KeyValuePair<string, List<SubFile>>>();
-            foreach (IGrouping<string, SubFile> g in subs.Where(s => s.Kind == SubKind.Module).GroupBy(s => s.Family, StringComparer.OrdinalIgnoreCase).OrderBy(g => g.Key))
-                sections.Add(new KeyValuePair<string, List<SubFile>>($"Modules · <b><color={Look.Html(Look.Ink)}>{g.Key} family</color></b>", g.OrderBy(s => s.Name).ToList()));
             foreach (IGrouping<string, SubFile> g in subs.Where(s => s.Kind == SubKind.Block).GroupBy(GroupOf, StringComparer.OrdinalIgnoreCase).OrderBy(g => g.Key))
-                sections.Add(new KeyValuePair<string, List<SubFile>>($"Building blocks · <b><color={Look.Html(Look.Ink)}>{g.Key}</color></b>", g.OrderBy(s => s.Name).ToList()));
+                sections.Add(new KeyValuePair<string, List<SubFile>>($"<b><color={Look.Html(Look.Ink)}>{g.Key}</color></b>", g.OrderBy(s => s.Name).ToList()));
             List<SubFile> unfiled = subs.Where(s => s.Kind == SubKind.Unfiled).OrderBy(s => s.Name).ToList();
             if (unfiled.Count > 0) sections.Add(new KeyValuePair<string, List<SubFile>>($"<color={Look.Html(Look.Warn)}>Unfiled</color>", unfiled));
 
@@ -838,7 +796,7 @@ namespace PhilsVesselNaming
                 RebuildList();
                 RebuildDetail();
             }));
-            Kit.Glyph(tile, (w - 34) / 2, 7, 34, s.Kind == SubKind.Module ? Look.Module : Look.Module, s.Kind == SubKind.Unfiled ? Look.Ink3 : Look.Fade(Look.Ink, 0.75f));
+            Kit.Glyph(tile, (w - 34) / 2, 7, 34, Look.Module, s.Kind == SubKind.Unfiled ? Look.Ink3 : Look.Fade(Look.Ink, 0.75f));
             Text name = Kit.Text(tile, 4, 42, w - 8, 28, s.Name, 12, Look.Ink, align: TextAnchor.UpperCenter, style: FontStyle.Bold);
             name.verticalOverflow = VerticalWrapMode.Truncate;
             Kit.Line(tile, 4, h - 18, w - 8, 14, s.Diameter > 0 ? Naming.Meters(s.Diameter) : "", 11, Look.Ink2, align: TextAnchor.MiddleCenter);
@@ -925,7 +883,6 @@ namespace PhilsVesselNaming
             y += 134;
 
             Family f = Library.FamilyOf(c);
-            Member m = Library.MemberOf(c);
             Kit.Eyebrow(detail, DX, y, DW, c.Filed ? $"{c.Category.Label} · {c.Family} family" : $"Unfiled · {c.Facility}{(c.RelDir.Length > 0 ? " / " + c.RelDir : "")}");
             Text title = Kit.Text(detail, DX, y + 14, DW, 52, c.Name, 22, Look.Ink, Look.Display, TextAnchor.UpperLeft, FontStyle.Bold);
             float th = Mathf.Min(52, title.preferredHeight + 2);
@@ -935,10 +892,9 @@ namespace PhilsVesselNaming
             float px = DX;
             if (c.Filed && c.Mark > 0)
             {
-                bool newest = m != null && m.Newest == c;
-                px += Kit.Pill(detail, px, y, $"Mark {Marks.Short(c.Style, c.Mark)} · {(newest ? "newest" : "retired")}", newest) + 6;
+                bool newest = f != null && f.Newest == c;
+                px += Kit.Pill(detail, px, y, $"Mark {Marks.Short(c.Style, c.Mark)} · {(newest ? "newest" : "older")}", newest) + 6;
             }
-            if (c.Role.Length > 0) px += Kit.Pill(detail, px, y, c.Role) + 6;
             Kit.Pill(detail, px, y, c.Facility);
             y += 32;
 
@@ -1082,13 +1038,11 @@ namespace PhilsVesselNaming
             RectTransform pic = Kit.Panel(detail, "Picture", DX, y, DW, 100, Look.Hero, Look.Line, 8);
             Kit.Glyph(pic, (DW - 80) / 2, 10, 80, Look.Module, Look.Fade(Look.Ink, 0.7f));
             y += 110;
-            string kind = s.Kind == SubKind.Module ? $"Module · {s.Family} family" : s.Kind == SubKind.Block ? $"Building block · {GroupOf(s)}" : "Unfiled subassembly";
+            string kind = s.Kind == SubKind.Block ? $"Module or block · {GroupOf(s)}" : "Unfiled subassembly";
             Kit.Eyebrow(detail, DX, y, DW, kind);
             Kit.Line(detail, DX, y + 14, DW, 30, s.Name, 22, Look.Ink, Look.Display, style: FontStyle.Bold);
             y += 50;
-            float px = DX;
-            if (s.Diameter > 0) px += Kit.Pill(detail, px, y, Naming.Meters(s.Diameter)) + 6;
-            if (s.Role.Length > 0) Kit.Pill(detail, px, y, s.Role);
+            if (s.Diameter > 0) Kit.Pill(detail, DX, y, Naming.Meters(s.Diameter));
             y += 32;
             Stats(ref y, new[]
             {

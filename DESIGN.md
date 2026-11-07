@@ -108,6 +108,20 @@ from the mockup:
 
 Checks: `Tools/Test-Core.ps1` runs 67 checks on the naming rules; `Tools/Check-Names.ps1` checks the lists.
 
+## Changed after Phil's first play-test (2026-11-06)
+
+- **No member level** (Phil: "most things I'll be building are singular"). A family is one design line
+  and its marks: Category, then Family, then Mark. A program built in pieces is several families sharing
+  a name prefix (DESU, DESU Drive, DESU Habitation; Evergreen, Evergreen Lab), and sorting A to Z keeps
+  them together. A family is the craft name without its mark, whatever its folder is called.
+- **Save always asks** for a craft in a family: save over the open mark (picked first, so Save then Enter
+  works) or save as the next one. The next mark counts up from the newest saved, not the one open.
+- **The Save panel uses the name in KSP's name box.** If a family of that name exists, it adds to it.
+  Only a craft still called "Untitled Space Craft" gets a dealt name.
+- **Subassemblies:** Module and Building block are one kind, "Module or block", with a name and a group
+  (a program like DESU, or a job like Control). Launchers and upper stages keep their ratings and marks.
+- **The drop box** saves the whole craft when nothing is held.
+
 ## Banked ideas (Phil's play-test thoughts, not decided)
 
 - **Merge holds a craft by its root part** (2026-11-06). A saved capsule with a heat shield below and a

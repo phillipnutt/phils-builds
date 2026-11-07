@@ -249,7 +249,7 @@ namespace PhilsVesselNaming
             if (!Marks.TryParse(name, out string rest, out _, out _)) return false;
             if (Naming.InFamily(rest, family)) return true;
             string folder = Stock.SaveFolder;
-            return Library.Craft.Any(c => Naming.SameName(c.Member, rest) && c.Filed && SamePath(Path.GetDirectoryName(c.Path), folder));
+            return Library.Craft.Any(c => Naming.SameName(c.Base, rest) && c.Filed && SamePath(Path.GetDirectoryName(c.Path), folder));
         }
 
         // The library's Save… button: the next mark for a filed design, or filing a new one.
@@ -342,10 +342,10 @@ namespace PhilsVesselNaming
         public void RenameFamily(Family f, string newName)
         {
             string folder = Library.FolderFor(f.Facility, f.Category, newName);
-            MarkStyle style = Library.StyleOf(f.Name, f.Craft.FirstOrDefault(c => c.Mark > 0)?.Style ?? MarkStyle.Roman);
+            MarkStyle style = Library.StyleOf(f.Name, f.Marks.FirstOrDefault(c => c.Mark > 0)?.Style ?? MarkStyle.Roman);
             string current = Stock.CurrentFile;
             string select = null;
-            foreach (CraftFile c in f.Craft.ToList())
+            foreach (CraftFile c in f.Marks.ToList())
             {
                 string n = Naming.SwapFamily(c.Name, f.Name, newName);
                 bool isCurrent = SamePath(c.Path, current);
@@ -414,7 +414,6 @@ namespace PhilsVesselNaming
             if (s == null) return;
             s.Kind = info.Kind;
             s.Family = info.Family;
-            s.Role = info.Role;
             s.Group = info.Group;
             s.Rating = info.Rating;
             s.Width = info.Width;
