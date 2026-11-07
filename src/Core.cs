@@ -8,7 +8,7 @@ using System.Globalization;
 using System.Linq;
 using System.Text.RegularExpressions;
 
-namespace PhilsVesselNaming
+namespace PhilsBuilds
 {
     public enum MarkStyle { Roman, Mk, Block, Letter }
 

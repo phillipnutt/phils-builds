@@ -6,7 +6,7 @@
 // name gives its member and mark ("Haven Lab II": member "Haven Lab", mark 2).
 // Subassemblies stay in the flat Subassemblies folder (the only place stock reads
 // them from); what kind each one is, and launcher ratings, live in this save's
-// PhilsVesselNaming.cfg.
+// PhilsBuilds.cfg.
 
 using System;
 using System.Collections.Generic;
@@ -16,7 +16,7 @@ using System.Reflection;
 using KSP.UI.Screens;
 using UnityEngine;
 
-namespace PhilsVesselNaming
+namespace PhilsBuilds
 {
     public class CraftFile
     {
@@ -88,7 +88,7 @@ namespace PhilsVesselNaming
         public static string SaveDir => System.IO.Path.Combine(KSPUtil.ApplicationRootPath, "saves", HighLogic.SaveFolder ?? "");
         public static string ShipsDir(string facility) => System.IO.Path.Combine(SaveDir, "Ships", facility);
         public static string SubsDir => System.IO.Path.Combine(SaveDir, "Subassemblies");
-        static string StorePath => System.IO.Path.Combine(SaveDir, "PhilsVesselNaming.cfg");
+        static string StorePath => System.IO.Path.Combine(SaveDir, "PhilsBuilds.cfg");
         public static string DeletedDir => System.IO.Path.Combine(SaveDir, "Deleted craft");
 
         // ---- Scanning --------------------------------------------------------------
@@ -99,7 +99,7 @@ namespace PhilsVesselNaming
             Families.Clear();
             Subs.Clear();
             LoadStore();
-            try { CraftProfileInfo.PrepareCraftMetaFileLoad(); } catch (Exception e) { Debug.LogWarning($"[PhilsVesselNaming] Craft metadata: {e.Message}"); }
+            try { CraftProfileInfo.PrepareCraftMetaFileLoad(); } catch (Exception e) { Debug.LogWarning($"[PhilsBuilds] Craft metadata: {e.Message}"); }
 
             foreach (string fac in new[] { "VAB", "SPH" })
             {
@@ -108,7 +108,7 @@ namespace PhilsVesselNaming
                 foreach (string file in SafeFiles(root, "*.craft", SearchOption.AllDirectories))
                 {
                     try { Craft.Add(ReadCraft(file, fac, root)); }
-                    catch (Exception e) { Debug.LogWarning($"[PhilsVesselNaming] Skipped {file}: {e.Message}"); }
+                    catch (Exception e) { Debug.LogWarning($"[PhilsBuilds] Skipped {file}: {e.Message}"); }
                 }
             }
             BuildFamilies();
@@ -117,7 +117,7 @@ namespace PhilsVesselNaming
                 foreach (string file in SafeFiles(SubsDir, "*.craft", SearchOption.TopDirectoryOnly))
                 {
                     try { Subs.Add(ReadSub(file)); }
-                    catch (Exception e) { Debug.LogWarning($"[PhilsVesselNaming] Skipped {file}: {e.Message}"); }
+                    catch (Exception e) { Debug.LogWarning($"[PhilsBuilds] Skipped {file}: {e.Message}"); }
                 }
             Version++;
         }
@@ -125,7 +125,7 @@ namespace PhilsVesselNaming
         static IEnumerable<string> SafeFiles(string dir, string pattern, SearchOption option)
         {
             try { return Directory.GetFiles(dir, pattern, option); }
-            catch (Exception e) { Debug.LogWarning($"[PhilsVesselNaming] Can't read {dir}: {e.Message}"); return new string[0]; }
+            catch (Exception e) { Debug.LogWarning($"[PhilsBuilds] Can't read {dir}: {e.Message}"); return new string[0]; }
         }
 
         static CraftFile ReadCraft(string file, string fac, string root)
@@ -224,7 +224,7 @@ namespace PhilsVesselNaming
             }
             catch (Exception e)
             {
-                Debug.LogWarning($"[PhilsVesselNaming] No stats for {c.Name}: {e.Message}");
+                Debug.LogWarning($"[PhilsBuilds] No stats for {c.Name}: {e.Message}");
             }
         }
 
@@ -251,7 +251,7 @@ namespace PhilsVesselNaming
             }
             catch (Exception e)
             {
-                Debug.LogWarning($"[PhilsVesselNaming] No stats for {s.Name}: {e.Message}");
+                Debug.LogWarning($"[PhilsBuilds] No stats for {s.Name}: {e.Message}");
             }
         }
 
@@ -278,7 +278,7 @@ namespace PhilsVesselNaming
             }
             catch (Exception e)
             {
-                Debug.LogWarning($"[PhilsVesselNaming] No thumbnail for {c.Name}: {e.Message}");
+                Debug.LogWarning($"[PhilsBuilds] No thumbnail for {c.Name}: {e.Message}");
                 t = null;
             }
             return thumbs[key] = t;
@@ -355,7 +355,7 @@ namespace PhilsVesselNaming
             try
             {
                 ConfigNode root = ConfigNode.Load(StorePath);
-                ConfigNode n = root?.GetNode("PHILS_VESSEL_NAMING") ?? root;
+                ConfigNode n = root?.GetNode("PHILS_BUILDS") ?? root;
                 if (n == null) return;
                 foreach (ConfigNode s in n.GetNodes("SUBASSEMBLY"))
                 {
@@ -374,7 +374,7 @@ namespace PhilsVesselNaming
             }
             catch (Exception e)
             {
-                Debug.LogError($"[PhilsVesselNaming] Couldn't read {StorePath}: {e.Message}");
+                Debug.LogError($"[PhilsBuilds] Couldn't read {StorePath}: {e.Message}");
             }
         }
 
@@ -383,7 +383,7 @@ namespace PhilsVesselNaming
             try
             {
                 var root = new ConfigNode();
-                ConfigNode n = root.AddNode("PHILS_VESSEL_NAMING");
+                ConfigNode n = root.AddNode("PHILS_BUILDS");
                 foreach (SubFile s in Subs.Where(x => x.Kind != SubKind.Unfiled).OrderBy(x => x.Name, StringComparer.OrdinalIgnoreCase))
                 {
                     ConfigNode c = n.AddNode("SUBASSEMBLY");
@@ -428,7 +428,7 @@ namespace PhilsVesselNaming
             }
             catch (Exception e)
             {
-                Debug.LogError($"[PhilsVesselNaming] Couldn't write {StorePath}: {e.Message}");
+                Debug.LogError($"[PhilsBuilds] Couldn't write {StorePath}: {e.Message}");
             }
         }
 

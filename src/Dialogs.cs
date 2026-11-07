@@ -10,11 +10,11 @@ using KSP.UI;
 using UnityEngine;
 using UnityEngine.UI;
 
-namespace PhilsVesselNaming
+namespace PhilsBuilds
 {
     public abstract class Dialog
     {
-        protected readonly VesselNamingEditor host;
+        protected readonly BuildsEditor host;
         protected readonly List<Btn> buttons = new List<Btn>();
         protected readonly List<Kit.Field> fields = new List<Kit.Field>();
         protected RectTransform root, body, foot, popup;
@@ -23,9 +23,9 @@ namespace PhilsVesselNaming
         protected const float TitleH = 56, FootH = 64, Pad = 18;
         Action pending;
         bool locked, typing;
-        const string LockId = "PhilsVesselNamingDialog", TypingLockId = "PhilsVesselNamingDialogTyping";
+        const string LockId = "PhilsBuildsDialog", TypingLockId = "PhilsBuildsDialogTyping";
 
-        protected Dialog(VesselNamingEditor host) { this.host = host; }
+        protected Dialog(BuildsEditor host) { this.host = host; }
 
         public bool IsOpen => root != null;
 
@@ -35,9 +35,9 @@ namespace PhilsVesselNaming
             W = w;
             H = h;
             Canvas canvas = UIMasterController.Instance.dialogCanvas;
-            blocker = Ui.Node(canvas.transform, "PhilsVesselNamingDim").Stretch();
+            blocker = Ui.Node(canvas.transform, "PhilsBuildsDim").Stretch();
             Ui.Solid(blocker, new Color(0, 0, 0, 0.45f), raycast: true);
-            root = Ui.Node(canvas.transform, "PhilsVesselNamingDialog");
+            root = Ui.Node(canvas.transform, "PhilsBuildsDialog");
             root.anchorMin = root.anchorMax = root.pivot = new Vector2(0.5f, 0.5f);
             root.sizeDelta = new Vector2(w, h);
             root.anchoredPosition = Vector2.zero;
@@ -98,7 +98,7 @@ namespace PhilsVesselNaming
                 Action a = pending;
                 pending = null;
                 try { a(); }
-                catch (Exception e) { Debug.LogError($"[PhilsVesselNaming] {e}"); }
+                catch (Exception e) { Debug.LogError($"[PhilsBuilds] {e}"); }
             }
         }
 
@@ -120,7 +120,7 @@ namespace PhilsVesselNaming
             }
             catch (Exception e)
             {
-                Debug.LogError($"[PhilsVesselNaming] Dialog failed, closing it: {e}");
+                Debug.LogError($"[PhilsBuilds] Dialog failed, closing it: {e}");
                 Close();
                 return;
             }
@@ -278,7 +278,7 @@ namespace PhilsVesselNaming
         Kit.Field nameField;
         Btn saveButton;
 
-        public SavePanel(VesselNamingEditor host, CraftFile filing, string reason = null) : base(host)
+        public SavePanel(BuildsEditor host, CraftFile filing, string reason = null) : base(host)
         {
             this.filing = filing;
             cat = Category.ById(lastCategory) ?? Guess();
@@ -520,7 +520,7 @@ namespace PhilsVesselNaming
         readonly string current, next, newest;
         bool asNext;        // Save over is the usual case, so Save then Enter keeps working on the open mark
 
-        public NextMarkDialog(VesselNamingEditor host, string family) : base(host)
+        public NextMarkDialog(BuildsEditor host, string family) : base(host)
         {
             current = Stock.ShipName;
             bool marked = Marks.TryParse(current, out string rest, out MarkStyle s, out int mark);
@@ -598,7 +598,7 @@ namespace PhilsVesselNaming
         static readonly SubKind[] Kinds = { SubKind.Launcher, SubKind.UpperStage, SubKind.Block };
         static readonly string[] KindLabels = { "Launcher", "Upper stage", "Module or block" };
 
-        public SubDialog(VesselNamingEditor host, SubFile editing, Part held, SubKind kind, bool wholeCraft = false) : base(host)
+        public SubDialog(BuildsEditor host, SubFile editing, Part held, SubKind kind, bool wholeCraft = false) : base(host)
         {
             this.editing = editing;
             this.held = held;
@@ -816,7 +816,7 @@ namespace PhilsVesselNaming
         Text problem, preview;
         Btn saveButton;
 
-        public RenameDialog(VesselNamingEditor host, Family family) : base(host)
+        public RenameDialog(BuildsEditor host, Family family) : base(host)
         {
             this.family = family;
             name = family.Name;

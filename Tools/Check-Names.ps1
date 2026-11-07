@@ -2,7 +2,7 @@ $ErrorActionPreference = 'Stop'
 # Checks the name lists. PIP's names are read from the PIP repo checked out beside this one.
 # Each list is one file holding one VESSEL_NAMES node: <Category>.cfg, or <Category>-<Class>.cfg
 # for a category split by size (Launchers-Heavy.cfg holds category = Launchers, class = Heavy).
-$dir = Join-Path $PSScriptRoot '..\GameData\PhilsVesselNaming\Names'
+$dir = Join-Path $PSScriptRoot '..\GameData\PhilsBuilds\Names'
 $pipFile = Join-Path $PSScriptRoot '..\..\IterativeDevelopment\Core\Names.cs'
 $expectedFiles = 25
 $namesPerList = 50

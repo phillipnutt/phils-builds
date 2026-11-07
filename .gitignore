@@ -3,6 +3,6 @@ obj/
 *.user
 .vs/
 # Built at release time, not committed.
-GameData/PhilsVesselNaming/Plugins/*.dll
+GameData/PhilsBuilds/Plugins/*.dll
 # Release zips.
 *.zip

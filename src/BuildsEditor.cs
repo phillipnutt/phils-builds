@@ -1,4 +1,4 @@
-// Phil's Vessel Naming
+// Phil's Builds
 //
 // Names, families and a library for craft and subassemblies, to help roleplay a
 // space program. In the VAB and SPH the Load button opens the library (craft by
@@ -14,16 +14,16 @@ using KSP.UI.Screens;
 using UnityEngine;
 using UnityEngine.UI;
 
-[assembly: KSPAssembly("PhilsVesselNaming", 0, 1)]
+[assembly: KSPAssembly("PhilsBuilds", 0, 1)]
 [assembly: System.Reflection.AssemblyVersion("0.1.0.0")]
 [assembly: System.Reflection.AssemblyFileVersion("0.1.0.0")]
 [assembly: System.Reflection.AssemblyInformationalVersion("0.1.0")]
-[assembly: System.Reflection.AssemblyTitle("Phil's Vessel Naming")]
+[assembly: System.Reflection.AssemblyTitle("Phil's Builds")]
 
-namespace PhilsVesselNaming
+namespace PhilsBuilds
 {
     [KSPAddon(KSPAddon.Startup.EditorAny, false)]
-    public class VesselNamingEditor : MonoBehaviour
+    public class BuildsEditor : MonoBehaviour
     {
         LibraryWindow window;
         Dialog dialog;
@@ -63,7 +63,7 @@ namespace PhilsVesselNaming
             hooked = true;
             // Opening on a craft from a family folder (Revert, a scene change): saves go back there.
             AdoptFolder(EditorDriver.filePathToLoad);
-            Debug.Log("[PhilsVesselNaming] Ready: Load opens the library.");
+            Debug.Log("[PhilsBuilds] Ready: Load opens the library.");
         }
 
         void HookButtons()
@@ -149,7 +149,7 @@ namespace PhilsVesselNaming
                 Category cat = CurrentCategory();
                 LauncherTags.Relabel(Stock.Ship, Stock.ShipName, PayloadType(cat), ref lastPayloadName);
             }
-            catch (Exception e) { Debug.LogWarning($"[PhilsVesselNaming] Stage names: {e.Message}"); }
+            catch (Exception e) { Debug.LogWarning($"[PhilsBuilds] Stage names: {e.Message}"); }
         }
 
         // The vessel type the payload gets: its category's, or whatever it already had.
@@ -289,7 +289,7 @@ namespace PhilsVesselNaming
                 AfterSave();
                 if (moveOld && File.Exists(Stock.CurrentFile ?? "") && !string.Equals(Path.GetFullPath(oldFile), Path.GetFullPath(Stock.CurrentFile), StringComparison.OrdinalIgnoreCase))
                 {
-                    try { Library.DeleteCraft(old); } catch (Exception e) { Debug.LogWarning($"[PhilsVesselNaming] Couldn't move the old copy: {e.Message}"); }
+                    try { Library.DeleteCraft(old); } catch (Exception e) { Debug.LogWarning($"[PhilsBuilds] Couldn't move the old copy: {e.Message}"); }
                 }
                 Refresh(Library.CraftAt(Stock.CurrentFile));
                 Say($"Saved {name} in {cat.Label}");
@@ -312,7 +312,7 @@ namespace PhilsVesselNaming
                 Library.SetNote(key, launcher, launcher != null ? LauncherTags.PayloadMass(Stock.Ship) : 0);
                 if (window.IsOpen) window.Refresh();
             }
-            catch (Exception e) { Debug.LogWarning($"[PhilsVesselNaming] After save: {e.Message}"); }
+            catch (Exception e) { Debug.LogWarning($"[PhilsBuilds] After save: {e.Message}"); }
         }
 
         public void OpenFile(CraftFile c) => Show(new SavePanel(this, c));
@@ -444,7 +444,7 @@ namespace PhilsVesselNaming
                         }
                 if (changed) root.Save(path);
             }
-            catch (Exception e) { Debug.LogWarning($"[PhilsVesselNaming] Couldn't tidy {path}: {e.Message}"); }
+            catch (Exception e) { Debug.LogWarning($"[PhilsBuilds] Couldn't tidy {path}: {e.Message}"); }
         }
 
         public void SetRating(SubFile s, float tons, float width, string notes)
@@ -465,7 +465,7 @@ namespace PhilsVesselNaming
                     if (Library.SubNamed(newName) == null)
                     {
                         try { Library.RenameSub(s, newName); EditorPartList.Instance?.RefreshSubassemblies(); }
-                        catch (Exception e) { Debug.LogWarning($"[PhilsVesselNaming] Couldn't rename {s.Name}: {e.Message}"); }
+                        catch (Exception e) { Debug.LogWarning($"[PhilsBuilds] Couldn't rename {s.Name}: {e.Message}"); }
                     }
                 }
             }

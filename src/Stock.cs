@@ -9,7 +9,7 @@ using System.Reflection;
 using KSP.UI.Screens;
 using UnityEngine;
 
-namespace PhilsVesselNaming
+namespace PhilsBuilds
 {
     static class Stock
     {
@@ -29,7 +29,7 @@ namespace PhilsVesselNaming
             undoLevel = e.GetField("undoLevel", Any);
             undoIndexAtLastSave = e.GetField("undoIndexAtLastSave", Any);
             if (saveShipWithCallback == null || shipToLoadSelected == null || setDefaultSaveFolder == null || undoLevel == null || undoIndexAtLastSave == null)
-                Debug.LogWarning("[PhilsVesselNaming] Some stock editor functions weren't found; parts of the mod may not work in this KSP version.");
+                Debug.LogWarning("[PhilsBuilds] Some stock editor functions weren't found; parts of the mod may not work in this KSP version.");
         }
 
         public static EditorLogic Editor => EditorLogic.fetch;
@@ -58,7 +58,7 @@ namespace PhilsVesselNaming
             }
             catch (Exception ex)
             {
-                Debug.LogWarning($"[PhilsVesselNaming] Couldn't set the save folder to {folder}: {ex.Message}");
+                Debug.LogWarning($"[PhilsBuilds] Couldn't set the save folder to {folder}: {ex.Message}");
                 return false;
             }
         }
@@ -90,13 +90,13 @@ namespace PhilsVesselNaming
             Find();
             if (Editor == null || saveShipWithCallback == null) return;
             try { saveShipWithCallback.Invoke(Editor, new object[] { new Callback(() => after?.Invoke()) }); }
-            catch (Exception ex) { Debug.LogError($"[PhilsVesselNaming] Save failed: {ex}"); }
+            catch (Exception ex) { Debug.LogError($"[PhilsBuilds] Save failed: {ex}"); }
         }
 
         public static void Load(string path)
         {
             try { EditorLogic.LoadShipFromFile(path); }
-            catch (Exception ex) { Debug.LogError($"[PhilsVesselNaming] Load failed: {ex}"); }
+            catch (Exception ex) { Debug.LogError($"[PhilsBuilds] Load failed: {ex}"); }
         }
 
         public static void Merge(string path)
@@ -104,7 +104,7 @@ namespace PhilsVesselNaming
             Find();
             if (Editor == null || shipToLoadSelected == null) return;
             try { shipToLoadSelected.Invoke(Editor, new object[] { path, CraftBrowserDialog.LoadType.Merge }); }
-            catch (Exception ex) { Debug.LogError($"[PhilsVesselNaming] Merge failed: {ex}"); }
+            catch (Exception ex) { Debug.LogError($"[PhilsBuilds] Merge failed: {ex}"); }
         }
 
         // Puts a subassembly on the cursor, as clicking it in the stock list does.
@@ -120,7 +120,7 @@ namespace PhilsVesselNaming
             }
             catch (Exception ex)
             {
-                Debug.LogError($"[PhilsVesselNaming] Couldn't pick up {path}: {ex}");
+                Debug.LogError($"[PhilsBuilds] Couldn't pick up {path}: {ex}");
                 return false;
             }
         }
@@ -152,7 +152,7 @@ namespace PhilsVesselNaming
             }
             catch (Exception ex)
             {
-                Debug.LogError($"[PhilsVesselNaming] Couldn't save subassembly {name}: {ex}");
+                Debug.LogError($"[PhilsBuilds] Couldn't save subassembly {name}: {ex}");
                 return false;
             }
         }
@@ -170,7 +170,7 @@ namespace PhilsVesselNaming
             }
             catch (Exception ex)
             {
-                Debug.LogWarning($"[PhilsVesselNaming] Couldn't hide the stock subassembly list: {ex.Message}");
+                Debug.LogWarning($"[PhilsBuilds] Couldn't hide the stock subassembly list: {ex.Message}");
             }
         }
     }

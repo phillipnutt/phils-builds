@@ -7,7 +7,7 @@ using System.Collections.Generic;
 using System.Linq;
 using UnityEngine;
 
-namespace PhilsVesselNaming
+namespace PhilsBuilds
 {
     static class NameDecks
     {
@@ -43,7 +43,7 @@ namespace PhilsVesselNaming
                     if (name.Length > 0 && !d.Names.Any(x => Naming.SameName(x, name))) { d.Names.Add(name); total++; }
                 }
             }
-            Debug.Log($"[PhilsVesselNaming] Name lists: {decks.Count} lists, {total} names");
+            Debug.Log($"[PhilsBuilds] Name lists: {decks.Count} lists, {total} names");
         }
 
         static Deck Find(string key)

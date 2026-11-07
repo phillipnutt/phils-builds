@@ -7,7 +7,7 @@ using UnityEngine;
 using UnityEngine.EventSystems;
 using UnityEngine.UI;
 
-namespace PhilsVesselNaming
+namespace PhilsBuilds
 {
     public static class Kit
     {

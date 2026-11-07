@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using UnityEngine;
 
-namespace PhilsVesselNaming
+namespace PhilsBuilds
 {
     // The look Phil's mods share with PIP: flat dark panels, PIP orange,
     // Bahnschrift for names and numbers and Segoe UI for text (both ship with
@@ -126,7 +126,7 @@ namespace PhilsVesselNaming
             }
             catch (Exception e)
             {
-                Debug.LogWarning($"[PhilsVesselNaming] System fonts unavailable: {e.Message}");
+                Debug.LogWarning($"[PhilsBuilds] System fonts unavailable: {e.Message}");
             }
             return Resources.GetBuiltinResource<Font>("Arial.ttf");
         }

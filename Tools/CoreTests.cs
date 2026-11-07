@@ -1,6 +1,6 @@
 // Checks the naming rules in src/Core.cs without KSP. Run Tools/Test-Core.ps1.
 using System;
-using PhilsVesselNaming;
+using PhilsBuilds;
 
 static class CoreTests
 {

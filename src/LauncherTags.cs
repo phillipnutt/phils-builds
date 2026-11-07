@@ -14,7 +14,7 @@ using System.Linq;
 using System.Text.RegularExpressions;
 using UnityEngine;
 
-namespace PhilsVesselNaming
+namespace PhilsBuilds
 {
     static class LauncherTags
     {

@@ -9,7 +9,7 @@ using KSP.UI;
 using UnityEngine;
 using UnityEngine.UI;
 
-namespace PhilsVesselNaming
+namespace PhilsBuilds
 {
     public class LibraryWindow
     {
@@ -18,7 +18,7 @@ namespace PhilsVesselNaming
 
         const float W = 960, H = 660, TitleH = 50, RailW = 196, DetailW = 300, FootH = 44;
         const float MidW = W - RailW - DetailW;
-        const string LockId = "PhilsVesselNamingWindow", TypingLockId = "PhilsVesselNamingTyping";
+        const string LockId = "PhilsBuildsWindow", TypingLockId = "PhilsBuildsTyping";
         const ControlTypes WindowLock = ControlTypes.EDITOR_PAD_PICK_PLACE | ControlTypes.EDITOR_PAD_PICK_COPY |
             ControlTypes.EDITOR_GIZMO_TOOLS | ControlTypes.EDITOR_ROOT_REFLOW | ControlTypes.CAMERACONTROLS;
         const string AllKey = null, UnfiledKey = "~unfiled", UpperKey = "~upper", UnratedKey = "~unrated";
@@ -33,7 +33,7 @@ namespace PhilsVesselNaming
         static readonly HashSet<string> collapsed = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         static string selectedCraftPath, selectedSubPath;
 
-        readonly VesselNamingEditor host;
+        readonly BuildsEditor host;
         readonly List<Btn> buttons = new List<Btn>();
         readonly List<Kit.Field> fields = new List<Kit.Field>();
         RectTransform root, rail, mid, list, detail;
@@ -49,7 +49,7 @@ namespace PhilsVesselNaming
         Text dropText;
         Image dropBg;
 
-        public LibraryWindow(VesselNamingEditor host) { this.host = host; }
+        public LibraryWindow(BuildsEditor host) { this.host = host; }
 
         public bool IsOpen => root != null;
 
@@ -71,7 +71,7 @@ namespace PhilsVesselNaming
             }
             catch (Exception e)
             {
-                Debug.LogError($"[PhilsVesselNaming] Couldn't open the library: {e}");
+                Debug.LogError($"[PhilsBuilds] Couldn't open the library: {e}");
                 Close();
             }
         }
@@ -101,7 +101,7 @@ namespace PhilsVesselNaming
         void Build()
         {
             Canvas canvas = UIMasterController.Instance.dialogCanvas;
-            root = Ui.Node(canvas.transform, "PhilsVesselNaming");
+            root = Ui.Node(canvas.transform, "PhilsBuilds");
             root.anchorMin = root.anchorMax = root.pivot = new Vector2(0.5f, 0.5f);
             root.sizeDelta = new Vector2(W, H);
             root.anchoredPosition = Clamped(savedPosition ?? Vector2.zero);
@@ -139,7 +139,7 @@ namespace PhilsVesselNaming
 
             Ui.Picture(Ui.Node(root, "Logo").At(14, 14, 22, 22), Look.Tag, Look.Amber);
             Ui.Label(Ui.Node(root, "Title").At(44, 0, 220, TitleH),
-                $"<color={Look.Html(Look.Ink3)}>Phil's</color> <b>Vessel Naming</b>", Look.Display, 19, Look.Ink);
+                $"<color={Look.Html(Look.Ink3)}>Phil's</color> <b>Builds</b>", Look.Display, 19, Look.Ink);
 
             tabButtons = new Btn[3];
             float x = 262;
@@ -1118,7 +1118,7 @@ namespace PhilsVesselNaming
                 Action a = pending;
                 pending = null;
                 try { a(); }
-                catch (Exception e) { Debug.LogError($"[PhilsVesselNaming] {e}"); }
+                catch (Exception e) { Debug.LogError($"[PhilsBuilds] {e}"); }
             }
             if (root != null && builtVersion != Library.Version) RebuildAll();
         }
@@ -1136,7 +1136,7 @@ namespace PhilsVesselNaming
             }
             catch (Exception e)
             {
-                Debug.LogError($"[PhilsVesselNaming] Window update failed, closing it: {e}");
+                Debug.LogError($"[PhilsBuilds] Window update failed, closing it: {e}");
                 host.CloseWindow();
                 return;
             }

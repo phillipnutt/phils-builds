@@ -1,4 +1,4 @@
-# Phil's Vessel Naming
+# Phil's Builds
 
 > **Written by an AI.** Every line of code in this mod was written by Claude (Anthropic's AI model).
 > Phil Nutt designs it and play-tests it. He isn't a programmer, and no human has reviewed the code.
@@ -6,8 +6,9 @@
 
 A Kerbal Space Program 1.12 mod for naming and organizing your craft like a real space program.
 
-- **Families and marks.** Craft are saved into families, like Thunderbolt I, II, III. Each family can have
-  members by role, like Haven, Haven Lab and Haven Service. Older marks stay and still load.
+- **Families and marks.** Craft are saved into families, like Thunderbolt I, II, III. Older marks stay and
+  still load. A program built in pieces is several families sharing a name, like Haven, Haven Lab and
+  Haven Service.
 - **Launchers rated by payload.** Save a launcher with its rating: tons to orbit and widest payload.
   The library then shows only the launchers that can lift what's in the editor. Click one to pick it up,
   just like a stock subassembly. Launcher names carry the payload code, so a 30-ton launcher is "Oak 030".
@@ -21,7 +22,7 @@ A Kerbal Space Program 1.12 mod for naming and organizing your craft like a real
 
 Craft are stored as real folders, `Ships/VAB/<Category>/<Family>/`, so they stay sorted in the stock
 load dialog even without this mod. Subassemblies stay in the stock Subassemblies folder. What kind each one
-is, and launcher ratings, are kept in `saves/<save>/PhilsVesselNaming.cfg`.
+is, and launcher ratings, are kept in `saves/<save>/PhilsBuilds.cfg`.
 
 ## Adding names
 

@@ -1,7 +1,8 @@
-# Phil's Vessel Naming: design
+# Phil's Builds: design
 
 > Written by Claude (an AI). Phil designs and play-tests; he isn't a programmer.
-> Working name. Design stage: nothing is built yet.
+> Called "Phil's Vessel Naming" until 2026-11-07, when Phil renamed it Phil's Builds: it's about the builds
+> themselves (saving, sorting, launchers), not only their names.
 
 A KSP 1.12 mod for naming, grouping and finding craft and subassemblies, to help roleplay a space program:
 families with marks (Thunderbolt I, II, III), launchers rated by payload, themed name suggestions, and
@@ -19,7 +20,7 @@ one library window in place of the stock craft loader and subassembly list.
    picks it up on the cursor, like a stock subassembly, and you attach it yourself.
 4. **Name lists.** Themed suggestions per build category, dealt in random order, skipping names already
    used in the save. You can always type your own. 22 categories (below), about 50 names each, in
-   `GameData/PhilsVesselNaming/Names/*.cfg` as `VESSEL_NAMES` nodes. Players and mods add names by adding
+   `GameData/PhilsBuilds/Names/*.cfg` as `VESSEL_NAMES` nodes. Players and mods add names by adding
    another node with the same `category`.
 5. **One window, PIP's look.** It replaces both the stock craft loader and the subassembly UI. The yellow
    Load button opens it.

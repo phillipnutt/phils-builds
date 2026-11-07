@@ -3,7 +3,7 @@ using UnityEngine;
 using UnityEngine.EventSystems;
 using UnityEngine.UI;
 
-namespace PhilsVesselNaming
+namespace PhilsBuilds
 {
     // Small helpers for building the window out of plain Unity UI pieces.
     static class Ui
