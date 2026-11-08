@@ -633,6 +633,7 @@ namespace PhilsBuilds
             string target = System.IO.Path.Combine(dest, s.Name + ".craft");
             for (int i = 2; File.Exists(target); i++) target = System.IO.Path.Combine(dest, $"{s.Name} ({i}).craft");
             File.Move(s.Path, target);
+            Thumbs.Delete(s.Name);
             Subs.Remove(s);
             subNodes.Remove(s.Name);
             designIds.Remove(KeyOf(s));
@@ -658,6 +659,7 @@ namespace PhilsBuilds
             // Craft notes that name this launcher follow the rename.
             foreach (CraftNote n in Notes.Values.Where(n => Naming.SameName(n.Launcher, s.Name))) n.Launcher = newName;
             MoveIds(KeyOf(s), "sub:" + newName);
+            Thumbs.Rename(s.Name, newName);
             s.Name = newName;
             s.Path = Full(dest);
             SaveStore();

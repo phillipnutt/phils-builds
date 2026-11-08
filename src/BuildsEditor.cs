@@ -414,7 +414,13 @@ namespace PhilsBuilds
             Design d = BuildsApi.OfFile(s.Path);
             string launcher = s.Kind == SubKind.Launcher ? s.Name : null;
             string name = IsStage(s) && Stock.Empty ? s.Name : null;
-            if (!Stock.PickUp(s.Path, sc => Spawned(sc, d, PlaceHow.PickUp, launcher, null, name))) Say($"Couldn't pick up {s.Name}");
+            if (!Stock.PickUp(s.Path, sc =>
+                {
+                    // A subassembly saved before the library took pictures gets one now.
+                    if (!Thumbs.Has(s.Name)) Thumbs.Take(sc, s.Name);
+                    Spawned(sc, d, PlaceHow.PickUp, launcher, null, name);
+                }))
+                Say($"Couldn't pick up {s.Name}");
         }
 
         static bool IsStage(SubFile s) => s != null && (s.Kind == SubKind.Launcher || s.Kind == SubKind.UpperStage);
@@ -438,6 +444,7 @@ namespace PhilsBuilds
         {
             try
             {
+                if (!Thumbs.Has(s.Name)) Thumbs.Take(ship, s.Name);
                 if (s.Kind == SubKind.Launcher) LauncherTags.Tag(ship.parts[0].localRoot, s.Name);
                 // Saves go to the facility's own folder until it's filed, not into the
                 // Subassemblies folder it came from or a family folder left open before.

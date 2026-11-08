@@ -179,6 +179,7 @@ namespace PhilsBuilds
                 {
                     foreach (var kv in stages) if (kv.Key != null) kv.Key.inverseStage = kv.Value;
                 }
+                Thumbs.Take(sc, name);
                 if (sc.vesselDeltaV != null) UnityEngine.Object.Destroy(sc.vesselDeltaV.gameObject);
                 try { EditorPartList.Instance?.RefreshSubassemblies(); } catch { }
                 return new System.Collections.Generic.List<Part>(sc.parts);

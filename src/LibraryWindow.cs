@@ -754,7 +754,9 @@ namespace PhilsBuilds
             }));
             Color ink = dim ? Look.Fade(Look.Ink, 0.5f) : Look.Ink, ink2 = dim ? Look.Fade(Look.Ink2, 0.6f) : Look.Ink2;
             RectTransform th = Kit.Panel(row, "Thumb", 12, 8, 40, 42, Look.Panel2, Look.Line, 6);
-            Kit.Glyph(th, 4, 5, 32, Look.Rocket, dim ? Look.Fade(Look.Amber, 0.4f) : Look.Fade(Look.Amber, 0.8f));
+            Texture2D pic = Thumbs.Of(s);
+            if (pic != null) Fit(th, pic, 36, 38);
+            else Kit.Glyph(th, 4, 5, 32, Look.Rocket, dim ? Look.Fade(Look.Amber, 0.4f) : Look.Fade(Look.Amber, 0.8f));
 
             float textW = w - 64 - 150;
             Text name = Kit.Line(row, 64, 9, textW, 20, s.Name, 14, ink, style: FontStyle.Bold);
@@ -993,7 +995,9 @@ namespace PhilsBuilds
                 RebuildList();
                 RebuildDetail();
             }));
-            Kit.Glyph(tile, (w - 34) / 2, 7, 34, Look.Module, s.Kind == SubKind.Unfiled ? Look.Ink3 : Look.Fade(Look.Ink, 0.75f));
+            Texture2D pic = Thumbs.Of(s);
+            if (pic != null) Fit(Ui.Node(tile, "Pic").At(4, 5, w - 8, 36), pic, w - 8, 36);
+            else Kit.Glyph(tile, (w - 34) / 2, 7, 34, Look.Module, s.Kind == SubKind.Unfiled ? Look.Ink3 : Look.Fade(Look.Ink, 0.75f));
             Text name = Kit.Text(tile, 4, 42, w - 8, 28, s.Name, 12, Look.Ink, align: TextAnchor.UpperCenter, style: FontStyle.Bold);
             name.verticalOverflow = VerticalWrapMode.Truncate;
             Kit.Line(tile, 4, h - 18, w - 8, 14, s.Diameter > 0 ? Naming.Meters(s.Diameter) : "", 11, Look.Ink2, align: TextAnchor.MiddleCenter);
@@ -1184,7 +1188,9 @@ namespace PhilsBuilds
             Library.LoadStats(s);
             float y = 14;
             RectTransform pic = Kit.Panel(detail, "Picture", DX, y, DW, 100, Look.Hero, Look.Line, 8);
-            Kit.Glyph(pic, (DW - 80) / 2, 10, 80, Look.Rocket, Look.Fade(Look.Amber, 0.85f));
+            Texture2D img = Thumbs.Of(s);
+            if (img != null) Fit(pic, img, DW - 6, 94);
+            else Kit.Glyph(pic, (DW - 80) / 2, 10, 80, Look.Rocket, Look.Fade(Look.Amber, 0.85f));
             y += 110;
             string kind = s.Kind == SubKind.UpperStage ? "Upper stage" : s.Rated ? $"Launcher · {Naming.ClassLabel(Naming.ClassOf(s.Rating))}" : "Launcher · not rated";
             Kit.Eyebrow(detail, DX, y, DW, $"{kind}{(s.Family.Length > 0 ? " · " + s.Family + " family" : "")}");
@@ -1238,7 +1244,9 @@ namespace PhilsBuilds
             Library.LoadStats(s);
             float y = 14;
             RectTransform pic = Kit.Panel(detail, "Picture", DX, y, DW, 100, Look.Hero, Look.Line, 8);
-            Kit.Glyph(pic, (DW - 80) / 2, 10, 80, Look.Module, Look.Fade(Look.Ink, 0.7f));
+            Texture2D img = Thumbs.Of(s);
+            if (img != null) Fit(pic, img, DW - 6, 94);
+            else Kit.Glyph(pic, (DW - 80) / 2, 10, 80, Look.Module, Look.Fade(Look.Ink, 0.7f));
             y += 110;
             string kind = s.Kind == SubKind.Block ? $"Module or block · {GroupOf(s)}" : "Unfiled subassembly";
             Kit.Eyebrow(detail, DX, y, DW, kind);
