@@ -15,8 +15,9 @@ from the library and spent-stage names in flight are newer.
   still load. A program built in pieces is several families sharing a name, like Haven, Haven Lab and
   Haven Service.
 - **Launchers rated by payload.** Save a launcher with its rating: tons to orbit and widest payload.
-  The library then shows only the launchers that can lift what's in the editor. Click one to pick it up,
-  just like a stock subassembly. Launcher names carry the payload code, so a 30-ton launcher is "Oak 030".
+  The library then shows only the launchers that can lift what's in the editor. Click one and press Add
+  to craft to put it on the cursor, like a stock subassembly. Launcher names carry the payload code, so a
+  30-ton launcher is "Oak 030".
 - **Themed names.** There are 1,250 suggested names in 25 lists, one for each kind of build: giants and
   mountains for launchers (sized to the payload), birds for landers, winds for spaceplanes, and so on.
   Each save deals them in its own shuffled order and never repeats a name you've used.
@@ -37,8 +38,10 @@ Copy `GameData/PhilsBuilds` from the release zip into your KSP `GameData` folder
 While it's installed:
 - The editor's Load button opens Phil's Builds' library in place of the stock craft loader.
 - The stock Subassemblies tab in the parts list is hidden; subassemblies are in the library.
-- The Save button asks where a new design goes, and for a filed one, whether to save over the open mark
-  or as the next one.
+- The Save button asks where a new design goes, and for a filed one, whether to save over the open mark,
+  as the next one, or as a new design.
+- The folder list that slides out from KSP's Save button is switched off: its rows saved craft straight
+  into a folder, past the library. The library decides where craft go.
 
 Remove the folder to go back to stock. Your craft stay where they are.
 
@@ -48,14 +51,17 @@ Remove the folder to go back to stock. Your craft stay where they are.
   first mark of a new family.
 - **Next mark:** load a mark, change it, press Save, and pick Save as next.
 - **Launchers:** build one on its own, then press Save and pick Launcher at the end of "What is it?" (or
-  click the drop box on the library's Launchers tab, or pick up its top part first and drop it there).
+  click the drop box on the library's Launchers tab, or grab its top part first and drop it there).
   Give it a rating, tons to orbit and widest payload, from your own test flights.
 - **Change a launcher:** load it, change it, press Save, and pick Save over or Save as its next mark
   (Rockall 002 II). Upper stages work the same way.
-- **Pick a launcher:** build the payload, open the Launchers tab, and click one that fits. It comes up
-  on the cursor, ready to attach underneath.
+- **Pick a launcher:** build the payload, open the Launchers tab, pick one that fits, and press Add to
+  craft. It comes up on the cursor, ready to attach underneath.
 - **Fly a launcher on its own:** with nothing in the editor, press Load on a launcher (or double-click it).
   It opens as the craft, named after itself.
+- **Something new from an old design:** load it, change it, press Save, and pick Save as new design.
+- **Move a family** to another category, or rename it: pick one of its marks and press Rename / move.
+  Every mark moves with it, and keeps its hangar copies.
 - **Unfiled craft** from before you installed the mod are listed under Unfiled. File them into families
   from there.
 

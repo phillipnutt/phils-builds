@@ -34,6 +34,23 @@
 - The Save panel's "What is it?" list ends with Launcher and Upper stage, which save the craft to the
   Launchers tab with its rating.
 - Re-rating a launcher that's open in the editor renames the craft along with it.
+- Save has a third choice beside Save over and Save as the next mark: Save as new design, which goes on
+  to the usual "What is it?" panel. Launchers and upper stages get it too, in place of the link.
+- A family's Rename button is now Rename / move: it can also move the family to another category. Every
+  mark moves, keeping its design id, so hangar copies stay with it.
+- Fixed: KSP's folder list that slides out from the Save button saved craft straight into a folder, past
+  the library, leaving a loose copy outside the family folder. The list is switched off.
+- A loose copy of a filed mark (a file with the mark's name outside its family folder) saves like the mark
+  itself: over it, as the next mark, or as a new design. The loose copy then goes to Deleted craft.
+- A design put into an empty editor as the whole craft (a hangar copy, or a craft merged in) takes the
+  design's name ("Gallant I", not "Untitled Space Craft") and saves into its family folder.
+- After loading a craft from outside the craft folders (a subassembly, a hangar copy), saves go to the
+  building's own folder, not to a family folder left open before.
+- Buttons say what they do: Load when the editor is empty and it becomes the craft, Add to craft when it
+  goes onto the craft there. ("Pick up" is gone.)
+- The hangar copy panel can show a second button beside Load, from the mod that keeps the hangar: the
+  Reusability Suite's "Load as stored". BuildsApi version 2 adds `CopyDetail.OpenLabel` and `Open` for it;
+  everything in version 1 is unchanged.
 
 ## 0.1.0 (2026-11-07)
 

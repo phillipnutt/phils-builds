@@ -38,6 +38,7 @@ namespace PhilsBuilds
         PlaceHow placingHow;
         int placingFrames;
         SubFile loadingSub;     // a launcher or upper stage being opened as the craft
+        CraftFile mergingWhole; // a craft merged into an empty editor: it's the whole craft
 
         void Awake() => Instance = this;
 
@@ -68,6 +69,7 @@ namespace PhilsBuilds
             for (int i = 0; i < 5; i++) yield return null;
             HookButtons();
             Stock.HideStockSubassemblies();
+            Stock.ShutSaveFolders();
             if (Stock.Editor.shipNameField != null) Stock.Editor.shipNameField.onValueChanged.AddListener(OnNameChanged);
             hooked = true;
             // Opening on a craft from a family folder (Revert, a scene change): saves go back there.
@@ -100,8 +102,9 @@ namespace PhilsBuilds
                 hookCheck = 0;
                 HookButtons();
                 Stock.HideStockSubassemblies();
+                Stock.ShutSaveFolders();
             }
-            if ((placing != null || loadingSub != null) && --placingFrames <= 0) { placing = null; loadingSub = null; }
+            if ((placing != null || loadingSub != null || mergingWhole != null) && --placingFrames <= 0) { placing = null; loadingSub = null; mergingWhole = null; }
             window?.Update();
             dialog?.Update();
         }
@@ -135,6 +138,12 @@ namespace PhilsBuilds
                 placing = null;
                 BuildsApi.RaisePlaced(d, placingHow, ship.parts);
             }
+            if (mergingWhole != null && type == CraftBrowserDialog.LoadType.Merge)
+            {
+                CraftFile c = mergingWhole;
+                mergingWhole = null;
+                Arrived(null, c.Name, false, true, c.Filed ? Path.GetDirectoryName(c.Path) : null);
+            }
             if (type != CraftBrowserDialog.LoadType.Normal) { Relabel(); return; }
             lastPayloadName = null;
             AdoptFolder(EditorDriver.filePathToLoad);
@@ -143,14 +152,16 @@ namespace PhilsBuilds
             if (opened != null) Stock.RetakeUndoStep();
         }
 
-        // After loading a craft, its own folder is where it saves.
+        // The one rule for where saves go after a load: the loaded file's own folder if it's
+        // one of the craft folders, otherwise (a subassembly, a hangar copy, a file from
+        // anywhere else) the facility's own folder, never a family folder left open before.
         void AdoptFolder(string path)
         {
             if (string.IsNullOrEmpty(path)) return;
             try
             {
                 string dir = Path.GetDirectoryName(Path.GetFullPath(path));
-                if (Directory.Exists(dir) && Library.InShips(dir) != null) Stock.SetSaveFolder(dir);
+                Stock.SetSaveFolder(Directory.Exists(dir) && Library.InShips(dir) != null ? dir : Library.ShipsDir(Stock.Facility));
             }
             catch { }
         }
@@ -252,13 +263,30 @@ namespace PhilsBuilds
             Library.Scan();
             SubFile stage = OpenStage();
             if (stage != null) return new StageMarkDialog(this, stage);
-            if (!Stock.HasCraft || !CurrentFiling(out _, out string family)) return new SavePanel(this, null);
+            if (!Stock.HasCraft) return new SavePanel(this, null);
+            if (!CurrentFiling(out _, out string family))
+            {
+                // A loose copy of a filed mark (KSP's own save put it outside the family
+                // folder): Save offers what the filed mark would, and puts it back.
+                CraftFile twin = LooseTwin(out CraftFile loose);
+                return twin != null ? new NextMarkDialog(this, twin.Family, Path.GetDirectoryName(twin.Path), loose) : (Dialog)new SavePanel(this, null);
+            }
             // A name typed in the box that isn't a mark of this family ("Orpheus" in the
             // Orpheus I family) would save a stray file into the folder, so ask instead.
             if (!FitsFamily(Stock.ShipName, family))
                 return new SavePanel(this, null, $"\"{Stock.ShipName}\" isn't a mark of the {family} family, so where should it go?");
-            // Phil: Save always asks, over the open mark or as the next one.
-            return new NextMarkDialog(this, family);
+            // Phil: Save always asks: over the open mark, as the next one, or as a new design.
+            return new NextMarkDialog(this, family, Stock.SaveFolder);
+        }
+
+        // The craft open came from an unfiled file with the same name as a filed mark in this
+        // building (Phil's loose "Magellan I", play-test 2026-11-08): that mark, and the file.
+        static CraftFile LooseTwin(out CraftFile loose)
+        {
+            loose = Library.CraftAt(Stock.CurrentFile);
+            if (loose == null || loose.Filed) { loose = null; return null; }
+            CraftFile l = loose;
+            return Library.Craft.FirstOrDefault(c => c.Filed && c.Facility == l.Facility && Naming.SameName(c.Name, l.Name));
         }
 
         // A name fits the open family when it's a mark of the family, or a mark of a
@@ -310,19 +338,28 @@ namespace PhilsBuilds
             }
         }
 
-        public void QuickSave()
-        {
-            Relabel();
-            bool existed = FileExists(Stock.CurrentFile);
-            Stock.Save(() => AfterSave(existed));
-        }
+        public void QuickSave() => SaveMark(null);
 
-        public void SaveAs(string name)
+        // Saves the open craft as `name` (null: under its own name), into `folder` (null:
+        // where it saves now). A loose copy it was opened from goes to Deleted craft once the
+        // family has it.
+        public void SaveMark(string name, string folder = null, CraftFile loose = null)
         {
-            Stock.ShipName = name;
+            if (folder != null && !Stock.SetSaveFolder(folder)) { Say("Couldn't use that folder for saving"); return; }
+            if (name != null) Stock.ShipName = name;
             Relabel();
             bool existed = FileExists(Stock.CurrentFile);
-            Stock.Save(() => { AfterSave(existed); Say($"Saved {name}"); });
+            Stock.Save(() =>
+            {
+                AfterSave(existed);
+                if (loose != null && File.Exists(Stock.CurrentFile ?? "") && File.Exists(loose.Path) && !Paths.Same(loose.Path, Stock.CurrentFile))
+                {
+                    try { Library.DeleteCraft(loose); }
+                    catch (Exception e) { Debug.LogWarning($"[PhilsBuilds] Couldn't move the loose copy {loose.Name}: {e.Message}"); }
+                    Refresh(Library.CraftAt(Stock.CurrentFile));
+                }
+                if (name != null || loose != null) Say($"Saved {Stock.ShipName}");
+            });
         }
 
         static bool FileExists(string path) => !string.IsNullOrEmpty(path) && File.Exists(path);
@@ -387,9 +424,13 @@ namespace PhilsBuilds
 
         public void OpenRename(Family f) { if (f != null) Show(new RenameDialog(this, f)); }
 
-        public void RenameFamily(Family f, string newName)
+        // Renames a family, moves it to another category, or both: every mark goes to the new
+        // folder, keeping its design ids (so hangar copies stay with it) and notes.
+        public void RenameFamily(Family f, string newName, Category cat = null)
         {
-            string folder = Library.FolderFor(f.Facility, f.Category, newName);
+            cat = cat ?? f.Category;
+            bool moved = cat != f.Category, renamed = newName != f.Name;
+            string folder = Library.FolderFor(f.Facility, cat, newName);
             MarkStyle style = Library.StyleOf(f.Name, f.Marks.FirstOrDefault(c => c.Mark > 0)?.Style ?? MarkStyle.Roman);
             string current = Stock.CurrentFile;
             string select = null;
@@ -408,7 +449,8 @@ namespace PhilsBuilds
             Library.SetStyle(newName, style);
             Library.Scan();
             Refresh(Library.CraftAt(select));
-            Say($"Renamed {f.Name} to {newName}");
+            Relabel();
+            Say(moved && renamed ? $"Renamed {f.Name} to {newName} and moved it to {cat.Label}" : moved ? $"Moved {f.Name} to {cat.Label}" : $"Renamed {f.Name} to {newName}");
         }
 
         public void DeleteCraft(CraftFile c)
@@ -427,6 +469,7 @@ namespace PhilsBuilds
             placing = BuildsApi.OfFile(c.Path);                 // null for an unfiled craft
             placingHow = merge ? PlaceHow.Merge : PlaceHow.Load;
             placingFrames = 30;
+            mergingWhole = merge && Stock.Empty ? c : null;
             if (merge) Stock.Merge(c.Path);
             else Stock.Load(c.Path);
         }
@@ -450,9 +493,9 @@ namespace PhilsBuilds
             if (!Stock.PickUp(s.Path, sc =>
                 {
                     Thumbs.TakeIfMissing(sc, s.Name);       // one saved before the library took pictures
-                    Spawned(sc, d, PlaceHow.PickUp, null, s.IsStage ? s.Name : null, s.Kind == SubKind.Launcher, intoEmpty);
+                    Spawned(sc, d, PlaceHow.PickUp, null, s.IsStage ? s.Name : null, s.Kind == SubKind.Launcher, intoEmpty, null);
                 }))
-                Say($"Couldn't pick up {s.Name}");
+                Say($"Couldn't load {s.Name}");
         }
 
 
@@ -480,10 +523,7 @@ namespace PhilsBuilds
                 float lift = Stock.LiftOffFloor(ship);
                 if (lift > 0) Debug.Log($"[PhilsBuilds] Lifted {s.Name} {lift:0.00} m onto the floor (floor at {Stock.Floor:0.00} m)");
                 if (s.Kind == SubKind.Launcher) LauncherTags.Tag(ship.parts[0].localRoot, s.Name);
-                // Saves go to the facility's own folder until it's filed, not into the
-                // Subassemblies folder it came from or a family folder left open before.
-                Stock.SetSaveFolder(Library.ShipsDir(Stock.Facility));
-                Stock.ShipName = s.Name;
+                Stock.ShipName = s.Name;        // saves go to the facility's own folder (AdoptFolder)
             }
             catch (Exception e) { Debug.LogWarning($"[PhilsBuilds] Opening {s.Name}: {e.Message}"); }
         }
@@ -504,13 +544,14 @@ namespace PhilsBuilds
             ICopies copies = BuildsApi.Copies;
             if (copies == null || HandsFull()) return;
             window.Close();
-            bool stage = d.Kind == DesignKind.Launcher || d.Kind == DesignKind.UpperStage, intoEmpty = Stock.Empty;
+            bool named = d.Kind != DesignKind.Block, intoEmpty = Stock.Empty;
+            string folder = FolderOf(d);
             try
             {
                 copies.Build(d, row, sc =>
                 {
                     if (this == null || sc == null || !Stock.Hold(sc)) return;
-                    Spawned(sc, d, PlaceHow.Copy, row.Id, stage ? d.Name : null, d.Kind == DesignKind.Launcher, intoEmpty);
+                    Spawned(sc, d, PlaceHow.Copy, row.Id, named ? d.Name : null, d.Kind == DesignKind.Launcher, intoEmpty, folder);
                 });
             }
             catch (Exception e)
@@ -520,15 +561,30 @@ namespace PhilsBuilds
             }
         }
 
-        // Parts are on the cursor (or are the craft, on an empty editor): a launcher or upper
-        // stage (`stage`, its name) gets its names, and anyone listening hears where the
-        // parts came from.
-        void Spawned(ShipConstruct sc, Design d, PlaceHow how, string copyId, string stage, bool launcher, bool intoEmpty)
+        // A hangar copy loaded just as it's stored, by the mod that keeps the hangar (Phil,
+        // play-test 2026-11-08: beside Load in the window). It replaces the craft; the window
+        // has already asked about unsaved changes.
+        public void OpenCopy(Action open)
         {
-            if (stage != null)
+            if (open == null) return;
+            window.Close();
+            try { open(); }
+            catch (Exception e)
+            {
+                Debug.LogError($"[PhilsBuilds] Couldn't load the hangar copy: {e}");
+                Say("Couldn't load that hangar copy");
+            }
+        }
+
+        // Parts are on the cursor (or are the craft, on an empty editor). A craft design or a
+        // launcher or upper stage (`name`, its name; null for a block) arrives by the rule
+        // below, and anyone listening hears where the parts came from.
+        void Spawned(ShipConstruct sc, Design d, PlaceHow how, string copyId, string name, bool launcher, bool intoEmpty, string folder)
+        {
+            if (name != null)
             {
                 Part root = Stock.Held ?? sc.parts[0].localRoot;
-                StageArrived(root, stage, launcher, intoEmpty);
+                Arrived(root, name, launcher, intoEmpty, folder);
                 if (launcher)
                     LauncherTags.EnsurePayload(Stock.Ship, new System.Collections.Generic.HashSet<Part>(LauncherTags.Subtree(root)), Stock.ShipName,
                         PayloadType(CurrentCategory()), ref lastPayloadName);
@@ -536,15 +592,25 @@ namespace PhilsBuilds
             if (d != null) BuildsApi.RaisePlaced(d, how, sc.parts, copyId);
         }
 
-        // The one rule for a launcher or upper stage joining the editor's craft (picked up,
-        // built from the hangar, or just saved from it): a launcher's parts get its stage
-        // names, and if it's the whole craft and the craft has only a stand-in name (KSP's
-        // default, or a stage's), the craft takes its name, so Save knows it.
-        void StageArrived(Part root, string name, bool launcher, bool whole)
+        // The one rule for a design joining the editor's craft (loaded or added from the
+        // library, built from the hangar, or just saved from it): a launcher's parts get its
+        // stage names, and if it's the whole craft and the craft has only a stand-in name
+        // (KSP's default, or a stage's), the craft takes the design's name and saves go to
+        // its family folder (`folder`; the facility's own for a stage or an unfiled craft),
+        // so Save knows it. Phil, play-test 2026-11-08: a hangar Gallant I stayed "Untitled".
+        void Arrived(Part root, string name, bool launcher, bool whole, string folder = null)
         {
-            if (whole && Stock.IsPlaceholderName(Stock.ShipName)) Stock.ShipName = name;
+            if (whole && Stock.IsPlaceholderName(Stock.ShipName))
+            {
+                Stock.ShipName = name;
+                Stock.SetSaveFolder(folder ?? Library.ShipsDir(Stock.Facility));
+            }
             if (launcher) LauncherTags.Tag(root, name);
         }
+
+        // Where a design's craft saves: its family folder (a craft), or null.
+        static string FolderOf(Design d) =>
+            d != null && d.Kind == DesignKind.Craft && Library.CraftAt(d.Path) is CraftFile c && c.Filed ? Path.GetDirectoryName(c.Path) : null;
 
         public void OpenSubDialog(SubFile existing, Part held, SubKind kind, bool wholeCraft = false) =>
             Show(new SubDialog(this, existing, held, kind, wholeCraft));
@@ -599,7 +665,7 @@ namespace PhilsBuilds
             try
             {
                 var tree = new System.Collections.Generic.HashSet<Part>(LauncherTags.Subtree(held));
-                StageArrived(held, name, kind == SubKind.Launcher, Stock.HoldingCraft || (Stock.Ship?.parts?.All(tree.Contains) ?? true));
+                Arrived(held, name, kind == SubKind.Launcher, Stock.HoldingCraft || (Stock.Ship?.parts?.All(tree.Contains) ?? true));
                 Relabel();
             }
             catch (Exception e) { Debug.LogWarning($"[PhilsBuilds] Naming {name}'s stages: {e.Message}"); }

@@ -105,7 +105,13 @@ namespace PhilsBuilds
         public string Total = "";           // "30,510 · 1.1 days"
         public string LogTitle = "";        // "Flights"
         public List<string> Log = new List<string>();
-        public string Hint = "";            // under the Pick up button
+        public string Hint = "";            // under the Load / Add to craft button
+
+        // Version 2. When Open is set, a second button (OpenLabel: "Load as stored") sits beside
+        // Load: it replaces the editor's craft. Phil's Builds asks first if there are unsaved
+        // changes, as its own Load does, then closes its window and calls Open.
+        public string OpenLabel = "";
+        public Action Open;
     }
 
     public sealed class CopyChip
@@ -126,7 +132,7 @@ namespace PhilsBuilds
 
     public static class BuildsApi
     {
-        public const int Version = 1;
+        public const int Version = 2;       // 2: CopyDetail.OpenLabel and Open
 
         // Fired whenever Phil's Builds reads the library again: after every save,
         // filing, rename, re-rating and delete, and when its window opens.

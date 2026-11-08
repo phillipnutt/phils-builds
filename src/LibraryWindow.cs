@@ -901,7 +901,9 @@ namespace PhilsBuilds
             }
 
             float bottom = H - TitleH - 14;
-            string hint = Or(det.Hint, r.Reserved ? r.ReservedText : "");
+            Action open = det.Open;
+            bool confirm = confirmLoad && open != null;
+            string hint = confirm ? "Your changes in the editor haven't been saved. They'll be lost." : Or(det.Hint, r.Reserved ? r.ReservedText : "");
             float by = bottom - 40 - (hint.Length > 0 ? 38 : 0);
             List<string> log = (det.Log ?? new List<string>()).Where(s => !string.IsNullOrEmpty(s)).ToList();
             if (log.Count > 0)
@@ -915,10 +917,29 @@ namespace PhilsBuilds
                 lt.verticalOverflow = VerticalWrapMode.Truncate;
             }
 
-            Btn pick = Track(Kit.Primary(detail, "Pick up", DX, by, DW, 40, r.Reserved ? (Action)null : () => Later(() => host.PickUpCopy(d, r)), 16));
+            float hw = (DW - 8) / 2;
+            if (confirm)
+            {
+                Track(Kit.Ghost(detail, "Keep editing", DX, by, hw, 40, () => Later(() => { confirmLoad = false; RebuildDetail(); }), 14));
+                Track(Kit.Primary(detail, "Load anyway", DX + hw + 8, by, hw, 40, () => Later(() => { confirmLoad = false; host.OpenCopy(open); }), 14));
+                Kit.Text(detail, DX, by + 44, DW, 34, hint, 12, Look.Warn, align: TextAnchor.UpperCenter);
+                return;
+            }
+            // Phil: "Load" when it becomes the craft, "Add to craft" when it goes onto one.
+            float pw = open != null ? hw : DW;
+            Btn pick = Track(Kit.Primary(detail, PlaceLabel, DX, by, pw, 40, r.Reserved ? (Action)null : () => Later(() => host.PickUpCopy(d, r)), 16));
             if (r.Reserved) { pick.Enabled = false; pick.Refresh(); }
+            if (open != null)
+                Track(Kit.Ghost(detail, Or(det.OpenLabel, "Load as stored"), DX + hw + 8, by, hw, 40, () => Later(() =>
+                {
+                    if (Stock.Unsaved) { confirmLoad = true; RebuildDetail(); }
+                    else host.OpenCopy(open);
+                }), 14));
             if (hint.Length > 0) Kit.Text(detail, DX, by + 44, DW, 34, hint, 12, Look.Ink2, align: TextAnchor.UpperCenter);
         }
+
+        // What putting a design or copy in does: becomes the craft, or goes onto it.
+        static string PlaceLabel => Stock.Empty ? "Load" : "Add to craft";
 
         static string Or(string s, string fallback) => string.IsNullOrEmpty(s) ? fallback : s;
 
@@ -1045,8 +1066,8 @@ namespace PhilsBuilds
             dropText.color = hot ? Look.Amber : Look.Ink2;
             string what = tab == Tab.Launchers ? "a launcher" : "a module or block";
             if (state == 2) dropText.text = $"Click here to save {Stock.Held.partInfo?.title ?? "this part"} and everything under it";
-            else if (state == 1) dropText.text = $"Click to save the whole craft as {what}, or pick up a part to save just that piece";
-            else dropText.text = $"Build something or pick up a part, then click here to save it as {what}";
+            else if (state == 1) dropText.text = $"Click to save the whole craft as {what}, or grab a part to save just that piece";
+            else dropText.text = $"Build something or grab a part, then click here to save it as {what}";
         }
 
         // ---- The right column -------------------------------------------------------------------
@@ -1067,7 +1088,7 @@ namespace PhilsBuilds
                 SubFile s = SelSub;
                 bool inTab = s != null && (tab == Tab.Launchers ? s.IsStage
                                                                : !s.IsStage);
-                if (!inTab) DetailHint(tab == Tab.Launchers ? "Pick a launcher" : "Pick a subassembly", "Pick it up from here to attach it, like any subassembly.");
+                if (!inTab) DetailHint(tab == Tab.Launchers ? "Pick a launcher" : "Pick a subassembly", "Add it to your craft from here, like any subassembly.");
                 else if (s.IsStage)
                 {
                     if (SelCopy(s.Path) is CopyRow r && BuildsApi.OfFile(s.Path) is Design d) CopyPanel(d, r);
@@ -1178,7 +1199,7 @@ namespace PhilsBuilds
             }
             Track(Kit.Primary(detail, "Load", DX, bottom - 104, DW, 40, () => Later(() => TryLoad(c, false)), 16));
             Track(Kit.Ghost(detail, "Merge", DX, bottom - 58, (DW - 8) / 2, 34, () => Later(() => TryLoad(c, true))));
-            if (c.Filed) Track(Kit.Ghost(detail, "Rename", DX + (DW + 8) / 2, bottom - 58, (DW - 8) / 2, 34, () => Later(() => host.OpenRename(f))));
+            if (c.Filed) Track(Kit.Ghost(detail, "Rename / move", DX + (DW + 8) / 2, bottom - 58, (DW - 8) / 2, 34, () => Later(() => host.OpenRename(f))));
             else Track(Kit.Ghost(detail, "File…", DX + (DW + 8) / 2, bottom - 58, (DW - 8) / 2, 34, () => Later(() => host.OpenFile(c))));
             Track(Kit.Link(detail, "Delete…", DX, bottom - 20, DW, 20, () => Later(() => { confirmDelete = true; RebuildDetail(); }), size: 12));
         }
@@ -1260,7 +1281,7 @@ namespace PhilsBuilds
                 Text f = Kit.Text(detail, DX, y + 14, DW, 36, string.Join(", ", flies), 12, Look.Ink2, align: TextAnchor.UpperLeft);
                 f.verticalOverflow = VerticalWrapMode.Truncate;
             }
-            SubButtons(s, "Attach it under your payload, like any subassembly.");
+            SubButtons(s, Stock.Empty ? "The editor is empty, so it loads as the craft." : "Attach it under your payload, like any subassembly.");
         }
 
         void SubDetail(SubFile s)
@@ -1309,14 +1330,10 @@ namespace PhilsBuilds
                 return;
             }
             float by = bottom - (caption != null ? 104 : 86);
-            if (s.IsStage && Stock.Empty)
-            {
-                // Nothing in the editor: a launcher or stage can be opened as the craft itself.
-                Track(Kit.Primary(detail, "Load", DX, by, DW - 8 - 104, 40, () => Later(() => host.LoadSub(s)), 16));
-                Track(Kit.Ghost(detail, "Pick up", DX + DW - 104, by + 3, 104, 34, () => Later(() => host.PickUp(s))));
-                caption = "The editor is empty, so Load opens it as the craft.";
-            }
-            else Track(Kit.Primary(detail, "Pick up", DX, by, DW, 40, () => Later(() => host.PickUp(s)), 16));
+            // One button, named for what it does (Phil: "pick up" was confusing). On an empty
+            // editor it's Load: a launcher or stage opens as the craft itself, a block becomes
+            // the craft. Otherwise it's Add to craft: onto the cursor, to attach.
+            Track(Kit.Primary(detail, PlaceLabel, DX, by, DW, 40, () => Later(() => host.LoadSub(s)), 16));
             if (caption != null) Kit.Line(detail, DX, by + 42, DW, 18, caption, 12, Look.Ink2, align: TextAnchor.MiddleCenter);
             float ly = bottom - 20;
             string fileLabel = s.Kind == SubKind.Unfiled ? "File it…" : "Change…";

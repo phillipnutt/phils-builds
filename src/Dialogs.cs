@@ -538,20 +538,73 @@ namespace PhilsBuilds
 
     // ---- Save the next mark ---------------------------------------------------------------------
 
-    public class NextMarkDialog : Dialog
+    // The one Save dialog for a design already in the library (a craft's marks, or a launcher
+    // or upper stage): save over the open one, save it as the next mark, or save it as a new
+    // design (Phil, play-test 2026-11-08: "Save as new" as a third choice). Save over comes
+    // first, so Save then Enter keeps working on the open one.
+    public abstract class MarkDialog : Dialog
     {
-        readonly string current, next, newest;
-        bool asNext;        // Save over is the usual case, so Save then Enter keeps working on the open mark
+        protected enum Choice { Over, Next, New }
+        Choice choice = Choice.Over;
+        protected string note;      // over the choices: what saving a loose copy does
 
-        public NextMarkDialog(BuildsEditor host, string family) : base(host)
+        protected MarkDialog(BuildsEditor host) : base(host) { }
+
+        protected void OpenMarks(string title, string subtitle) => Open(title, subtitle, 720, string.IsNullOrEmpty(note) ? 330 : 372);
+
+        // `keeps` is what stays as it is when this is saved as something new.
+        protected void Choices(string overTitle, string overText, string nextTitle, string nextText, string keeps)
         {
+            float y = 18;
+            if (!string.IsNullOrEmpty(note))
+            {
+                Kit.Text(body, Pad, 14, W - 2 * Pad, 36, note, 13, Look.Warn, align: TextAnchor.UpperLeft);
+                y = 56;
+            }
+            float w = (W - 2 * Pad - 20) / 3;
+            Option(Pad, y, w, overTitle, overText, choice == Choice.Over, () => { choice = Choice.Over; Rebuild(); });
+            Option(Pad + w + 10, y, w, nextTitle, nextText, choice == Choice.Next, () => { choice = Choice.Next; Rebuild(); });
+            Option(Pad + 2 * (w + 10), y, w, "Save as new design", $"Something else now. Pick what it is and name it. {keeps} stays as it is.",
+                choice == Choice.New, () => { choice = Choice.New; Rebuild(); });
+            Kit.Text(body, Pad, y + 112, W - 2 * Pad, 20, "Pick one and press the orange button (or Enter). Cancel saves nothing.", 12, Look.Ink2,
+                align: TextAnchor.UpperLeft);
+        }
+
+        // The orange button follows the choice; a new design goes on to the Save panel.
+        protected void Foot(string nextName, Action over, Action next) =>
+            FootButtons(choice == Choice.New ? "Next…" : choice == Choice.Next ? $"Save {nextName}" : "Save", () =>
+            {
+                Close();
+                if (choice == Choice.New) host.OpenNewDesign();
+                else if (choice == Choice.Next) next();
+                else over();
+            }, true);
+
+        protected static string Tail(string name) =>
+            Marks.TryParse(name, out _, out MarkStyle s, out int m) ? "Mark " + Marks.Short(s, m) : name;
+    }
+
+    // ---- Save a craft from a family ------------------------------------------------------------
+
+    public class NextMarkDialog : MarkDialog
+    {
+        readonly string current, next, newest, folder, line;
+        readonly CraftFile loose;
+
+        // `folder` is the family's; `loose` is set when the craft open is a loose copy of one of
+        // its marks (a file outside the family folder): saving puts it back, and the copy goes
+        // to Deleted craft.
+        public NextMarkDialog(BuildsEditor host, string family, string folder, CraftFile loose = null) : base(host)
+        {
+            this.folder = folder;
+            this.loose = loose;
             current = Stock.ShipName;
             bool marked = Marks.TryParse(current, out string rest, out MarkStyle s, out int mark);
             if (!marked) { rest = current; mark = 1; }
+            line = rest;
             MarkStyle style = Library.StyleOf(family, marked ? s : MarkStyle.Roman);
             // The next mark comes after the newest one saved, not just after the open one:
             // with Mark III open and a Mark IV on file, the next is Mark V.
-            string folder = Stock.SaveFolder;
             int top = mark;
             foreach (CraftFile c in Library.Craft)
                 if (c.Mark > top && Naming.SameName(c.Base, rest) && (Paths.Same(System.IO.Path.GetDirectoryName(c.Path), folder) || c.Filed && c.Facility == Stock.Facility))
@@ -560,26 +613,23 @@ namespace PhilsBuilds
                     newest = c.Name;
                 }
             next = rest + " " + Marks.Format(style, top + 1);
-            Open($"Save {rest}", marked ? $"You have Mark {Marks.Short(s, mark)} open. What did you make?" : "What did you make?", 560, 380);
+            if (loose != null)
+            {
+                string cat = Category.ByFolder((Library.InShips(folder) ?? "").Split('/')[0])?.Label ?? "family";
+                note = $"This is a loose copy of {current}, outside its {cat} folder. However you save it, the loose copy then goes to Deleted craft.";
+            }
+            OpenMarks($"Save {rest}", loose != null ? $"A loose copy of {current}. What did you make?"
+                : marked ? $"You have Mark {Marks.Short(s, mark)} open. What did you make?" : "What did you make?");
         }
 
-        protected override void BuildBody()
-        {
-            float half = (W - 2 * Pad - 10) / 2;
-            Option(Pad, 18, half, $"Save over {Tail(current)}", $"Small fixes. It stays {current}.", !asNext, () => { asNext = false; Rebuild(); });
-            Option(Pad + half + 10, 18, half, $"Save as {Tail(next)}",
+        protected override void BuildBody() =>
+            Choices($"Save over {Tail(current)}", $"Small fixes. It stays {current}.",
+                $"Save as {Tail(next)}",
                 newest != null ? $"A new version, {next}, after {newest}. Older marks stay and still load." : $"A new version, {next}. The older mark stays and still loads.",
-                asNext, () => { asNext = true; Rebuild(); });
-            Kit.Text(body, Pad, 132, W - 2 * Pad, 60,
-                "Pick one and press Save (or Enter). Cancel saves nothing.", 12, Look.Ink2,
-                align: TextAnchor.UpperLeft);
-        }
-
-        static string Tail(string name) =>
-            Marks.TryParse(name, out _, out MarkStyle s, out int m) ? "Mark " + Marks.Short(s, m) : name;
+                line);
 
         protected override void BuildFoot() =>
-            FootButtons(asNext ? $"Save {Tail(next)}" : "Save", () => { Close(); if (asNext) host.SaveAs(next); else host.QuickSave(); }, true);
+            Foot(Tail(next), () => host.SaveMark(null, folder, loose), () => host.SaveMark(next, folder, loose));
     }
 
     // ---- Save a launcher or upper stage that's open on its own -----------------------------------
@@ -587,12 +637,11 @@ namespace PhilsBuilds
     // The craft in the editor is a launcher or upper stage from the library with nothing
     // built on it (loaded, or saved from here). Save asks what it asks for a craft's marks:
     // over it, or as its next mark (Phil, 2026-11-08: "Save over Haytor 002" or "next mark").
-    public class StageMarkDialog : Dialog
+    public class StageMarkDialog : MarkDialog
     {
         readonly SubFile current;
         readonly string next;
         readonly int nextMark;
-        bool asNext;
 
         public StageMarkDialog(BuildsEditor host, SubFile current) : base(host)
         {
@@ -609,31 +658,22 @@ namespace PhilsBuilds
             next = NameFor(family, nextMark);
             for (int i = 0; i < 50 && Library.SubNamed(next) != null; i++) next = NameFor(family, ++nextMark);
             string what = current.Kind == SubKind.Launcher ? "launcher" : "upper stage";
-            Open($"Save {current.Name}", $"You have the {what} {current.Name} open. What did you make?", 560, 380);
+            OpenMarks($"Save {current.Name}", $"You have the {what} {current.Name} open. What did you make?");
         }
 
         string NameFor(string family, int mark) =>
             current.Kind == SubKind.Launcher && current.Rating > 0 ? Naming.Launcher(family, current.Rating, current.Style, mark) : Naming.Stage(family, current.Style, mark);
 
+        // Built something on it? That's the third choice: a new design.
         protected override void BuildBody()
         {
-            float half = (W - 2 * Pad - 10) / 2;
             string lifts = current.Kind == SubKind.Launcher && current.Rated ? $", lifts {Naming.Tons(current.Rating)}" : "";
-            Option(Pad, 18, half, $"Save over {current.Name}", $"Small fixes. It stays {current.Name}{lifts}.", !asNext, () => { asNext = false; Rebuild(); });
-            Option(Pad + half + 10, 18, half, $"Save as {next}", $"A new version. {current.Name} stays in the library and still loads.",
-                asNext, () => { asNext = true; Rebuild(); });
-            Kit.Text(body, Pad, 132, W - 2 * Pad, 60,
-                "Pick one and press the orange button (or Enter). Cancel saves nothing. Built something on it? Save it as a new craft instead.", 12, Look.Ink2,
-                align: TextAnchor.UpperLeft);
+            Choices($"Save over {current.Name}", $"Small fixes. It stays {current.Name}{lifts}.",
+                $"Save as {next}", $"A new version. {current.Name} stays in the library and still loads.", current.Name);
         }
 
         protected override void BuildFoot() =>
-            FootButtons(asNext ? "Save new mark" : "Save over", () =>
-            {
-                Close();
-                if (asNext) host.SaveStage(current, next, nextMark);
-                else host.SaveStage(current, current.Name, current.Mark);
-            }, true, "Save as a new craft instead", () => { Close(); host.OpenNewDesign(); });
+            Foot(next, () => host.SaveStage(current, current.Name, current.Mark), () => host.SaveStage(current, next, nextMark));
     }
 
     // ---- Save or file a subassembly --------------------------------------------------------------
@@ -866,36 +906,47 @@ namespace PhilsBuilds
 
     // ---- Rename a family ----------------------------------------------------------------------------
 
+    // Renames a family, moves it to another category, or both (Phil, play-test 2026-11-08:
+    // Magellan was filed under Probes by mistake, and nothing could move it).
     public class RenameDialog : Dialog
     {
         readonly Family family;
         string name;
+        Category cat;
         Text problem, preview;
-        Btn saveButton;
 
         public RenameDialog(BuildsEditor host, Family family) : base(host)
         {
             this.family = family;
             name = family.Name;
-            Open($"Rename {family.Name}", $"Renames the family's folder and every craft in it", 520, 330);
+            cat = family.Category;
+            Open($"Rename or move {family.Name}", "Changes the family's folder and every craft in it", 520, 400);
         }
+
+        bool Renamed => Naming.Clean(name) != family.Name;
+        bool Moved => cat != family.Category;
 
         string Problem()
         {
             string n = Naming.Clean(name);
             if (n.Length == 0) return "Give it a name.";
-            if (!Naming.SameName(n, family.Name) && Library.Families.Any(f => f != family && f.Category == family.Category && Naming.SameName(f.Name, n)))
-                return $"There's already a {n} family here.";
+            if (!Renamed && !Moved) return "";
+            if (Library.Families.Any(f => f != family && f.Category == cat && f.Facility == family.Facility && Naming.SameName(f.Name, n)))
+                return $"There's already a {n} family in {cat.Label}.";
             return null;
         }
 
         protected override void BuildBody()
         {
-            float y = Label(16, "New name");
-            fields.Add(Kit.Input(body, Pad, y, W - 2 * Pad, 42, name, "Family name", v => { name = v; Refresh(); }, size: 19, font: Look.Display, padLeft: 12, limit: 40));
-            y += 52;
-            preview = Kit.Text(body, Pad, y, W - 2 * Pad, 70, "", 12, Look.Ink2, align: TextAnchor.UpperLeft);
-            problem = Kit.Line(body, Pad, y + 72, W - 2 * Pad, 18, "", 12, Look.Warn);
+            float y = Label(16, "Name");
+            fields.Add(Kit.Input(body, Pad, y, W - 2 * Pad, 42, name, "Family name", v => { name = v; Refresh(); RebuildFoot(); }, size: 19, font: Look.Display, padLeft: 12, limit: 40));
+            y += 56;
+            y = Label(y, "Category");
+            List<Category> cats = Category.Craft.ToList();
+            y = Select(y, cat.Label, Category.GroupLabel(cat.Group), cats.Select(c => c.Label).ToList(), i => { cat = cats[i]; Rebuild(); });
+            y += 4;
+            preview = Kit.Text(body, Pad, y, W - 2 * Pad, 54, "", 12, Look.Ink2, align: TextAnchor.UpperLeft);
+            problem = Kit.Line(body, Pad, y + 56, W - 2 * Pad, 18, "", 12, Look.Warn);
             Refresh();
         }
 
@@ -904,24 +955,30 @@ namespace PhilsBuilds
             if (preview == null) return;
             string n = Naming.Clean(name);
             var examples = family.Marks.Take(3).Select(c => Naming.SwapFamily(c.Name, family.Name, n));
-            preview.text = "Becomes: " + string.Join(", ", examples) + (family.Marks.Count() > 3 ? "…" : "");
+            preview.text = $"Becomes: {cat.Label} › {n}, with " + string.Join(", ", examples) + (family.Marks.Count() > 3 ? "…" : "") +
+                ". Marks and hangar copies stay.";
             string p = Problem();
             problem.text = p ?? "";
-            SetEnabled(saveButton, p == null);
-
         }
 
-        protected override void BuildFoot()
+        // The orange button says what it'll do, and waits until there's something to do.
+        string Verb => Renamed && Moved ? "Rename and move" : Moved ? "Move" : "Rename";
+
+        void RebuildFoot()
         {
-            FootButtons("Rename", () => Later(() =>
+            if (foot == null) return;
+            buttons.RemoveAll(b => b.Rt == null || b.Rt.IsChildOf(foot));
+            Kit.Clear(foot);
+            BuildFoot();
+        }
+
+        protected override void BuildFoot() =>
+            FootButtons(Verb, () => Later(() =>
             {
                 if (Problem() != null) return;
-                try { host.RenameFamily(family, Naming.Clean(name)); }
+                try { host.RenameFamily(family, Naming.Clean(name), cat); }
                 catch (Exception e) { problem.text = e.Message; return; }
                 Close();
             }), Problem() == null);
-            saveButton = buttons.LastOrDefault(b => b.Label != null && b.Label.text == "Rename");
-            Refresh();
-        }
     }
 }

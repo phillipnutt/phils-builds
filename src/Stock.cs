@@ -252,6 +252,31 @@ namespace PhilsBuilds
             }
         }
 
+        // KSP's list of folders that slides out from the Save button. Each row saves the
+        // craft straight into its folder, past the library (Phil's loose "Magellan I", play-test
+        // 2026-11-08), and its radio buttons change where Save goes. The library files craft
+        // itself, so the list is kept shut. The Save button is left alone.
+        static KSP.UI.UICraftSaveFlyoutController flyout;
+
+        public static void ShutSaveFolders()
+        {
+            try
+            {
+                if (flyout == null) flyout = UnityEngine.Object.FindObjectOfType<KSP.UI.UICraftSaveFlyoutController>();
+                if (flyout == null || flyout.locked && !flyout.enabled) return;
+                flyout.CloseFlyout();
+                flyout.locked = true;           // both ways of opening it check this
+                flyout.enabled = false;         // its Update would show the little tab again
+                var tab = typeof(KSP.UI.UICraftSaveFlyoutController).GetField("dropDownTag", Any)?.GetValue(flyout) as Component;
+                Transform save = Editor != null && Editor.saveBtn != null ? Editor.saveBtn.transform : null;
+                if (tab != null && (save == null || !save.IsChildOf(tab.transform))) tab.gameObject.SetActive(false);
+            }
+            catch (Exception ex) { Debug.LogWarning($"[PhilsBuilds] Couldn't shut KSP's save folder list: {ex.Message}"); }
+        }
+
+        // Is it shut? (For tests.)
+        public static bool SaveFoldersShut => flyout == null || flyout.locked;
+
         // Hides the stock Subassemblies category in the parts list: the library has them now.
         public static void HideStockSubassemblies()
         {

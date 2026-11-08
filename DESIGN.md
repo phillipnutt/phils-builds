@@ -221,7 +221,7 @@ home:
 - **Is this one of the save's launchers?** `Library.IsLauncherName`: in the library now, or before a
   rename or delete. Before, LauncherTags kept its own list, separate from the library's.
 - **Is the craft's name only a stand-in?** `Stock.IsPlaceholderName`: KSP's default, or a launcher's or
-  upper stage's. It's used when a stage joins the editor (`StageArrived`, which also tags a launcher) and
+  upper stage's. It's used when a design joins the editor (`Arrived`, which also tags a launcher) and
   by the Save panel. Before, there were three slightly different rules.
 - **Which Save dialog?** `BuildsEditor.SaveDialog`, for both the editor's Save button and the library's
   Save….
@@ -237,6 +237,46 @@ Behaviour is unchanged except in three corners where the old rules disagreed wit
 - The Save panel deals a new name over a deleted or renamed launcher's name, as it already did over a
   current one's.
 - The library's Save… gives the same "isn't a mark of this family" note as the editor's Save button.
+
+## Play-test 3 (2026-11-08, Phil approved the mockups)
+
+Phil's Big Test 1 play-through, routed by the Phil's Mods session.
+- **Save as new design** (Phil). Save is one dialog with three choices for anything already in the
+  library: save over the open one, save as the next mark, or save as a new design, which goes on to the
+  "What is it?" panel. `MarkDialog` holds the rule; `NextMarkDialog` (a craft's marks) and
+  `StageMarkDialog` (a launcher or upper stage) only say what the choices are called.
+- **Rename / move** (Phil filed Magellan under Probes by mistake). The family's Rename dialog also picks a
+  category. Moving uses the same `RenameFamily` → `Library.MoveCraft` path as renaming, so ids, notes and
+  pictures follow, and the old folder is removed when it's empty. The map icon follows the category only
+  for craft on a library launcher, from the next time they're loaded (that's the only time this mod sets
+  a vessel type).
+- **What wrote the loose Magellan I.** Hovering over KSP's Save button slides out a folder list
+  (`UICraftSaveFlyoutController`). Each row has its own save button (`EditorSaveFolderItem.SaveCraft` →
+  `ShipConstruction.SaveShipToPath`), which writes straight to disk with no log line. Its radio buttons
+  also change `EditorDriver.DefaultCraftSavePath`. Phil's file landed in the top row's folder, "Default"
+  (Ships/VAB), 10 s after a load. `Stock.ShutSaveFolders` locks the panel (both of its open routes check
+  `UIHoverSlidePanel.locked`, and only its Start writes it), disables the controller so its Update doesn't
+  show the tab again, and hides the tab unless the Save button is inside it. KSP's own "save first?"
+  questions (New, leaving the editor) still save through `saveShip`: over the open design, in its own
+  folder.
+- **Loose copies.** An unfiled file with a filed mark's name is that mark's loose copy (`LooseTwin`). Save
+  offers the mark's three choices with a note, saves into the family folder, then moves the loose file to
+  Deleted craft, as filing an unfiled craft already did.
+- **One rule for a design arriving whole** (`Arrived`, was `StageArrived`). A craft design (a hangar copy
+  or a merge into an empty editor) or a launcher or upper stage put in as the whole craft takes the
+  design's name if the craft's name is a stand-in, and saves go to its family folder (a stage's, or an
+  unfiled craft's: the building's own). Blocks don't name the craft. Agreed with the Reusability Suite
+  (play-test #7).
+- **One rule for where saves go after a load** (`AdoptFolder`). The loaded file's folder if it's a craft
+  folder, otherwise the building's own (this replaced a special case for loaded stages).
+- **Wording** (Phil: "pick up" is confusing). The button is Load when the editor is empty and the design
+  becomes the craft, and Add to craft when it goes onto a craft. Launchers and stages on an empty editor
+  have only Load now. The Suite's second button reads "Load as stored".
+- **BuildsApi version 2.** `CopyDetail.OpenLabel` and `CopyDetail.Open` (agreed with the Suite, play-test
+  #10): a second button beside Load that replaces the craft. Phil's Builds asks about unsaved changes
+  first, as its Load does. `Version` is a const, so a caller sees the number it was built against; the
+  Suite checks for the field by reflection. Wear % (play-test #17) needs nothing here: it goes in
+  `CopyRow.Text` and a detail chip.
 
 ## Banked ideas (Phil's play-test thoughts, not decided)
 
