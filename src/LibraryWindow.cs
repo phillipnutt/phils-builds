@@ -89,6 +89,9 @@ namespace PhilsBuilds
             buttons.Clear();
             fields.Clear();
             searchField = null;
+            // The old badges are only destroyed at the end of the frame; forget them now so
+            // a window opened straight away makes its own.
+            Array.Clear(tabCounts, 0, tabCounts.Length);
             confirmDelete = confirmLoad = false;
         }
 
@@ -530,10 +533,12 @@ namespace PhilsBuilds
             foreach (CraftFile m in f.Marks)
                 foreach (CopyRow r in RowsFor(m.Path).Where(x => !x.IsNew))
                     copies.Add((m.Path, r, f.Marks.Count > 1 && m.Mark > 0 ? Marks.Short(m.Style, m.Mark) : null));
-            float h = 60 + copies.Count * CopyH;
+            CraftFile newest = f.Newest;
+            string hangarNote = NoteFor(newest.Path);
+            float head = string.IsNullOrEmpty(hangarNote) ? 60 : 68;
+            float h = head + copies.Count * CopyH;
             CraftFile sel = SelCraft;
             bool selected = sel != null && f.Marks.Contains(sel);
-            CraftFile newest = f.Newest;
             RectTransform row = Kit.Panel(content, f.Name, x, y, w, h, selected ? Look.Wash(Look.Rail, 0.08f) : Look.Rail,
                 selected ? Look.Amber : Look.Line, 9);
             Kit.Clicks(row, n => Later(() =>
@@ -554,14 +559,13 @@ namespace PhilsBuilds
             if (newest.Mass > 0) bits.Add(Naming.Tons(note != null && note.Payload > 0 ? note.Payload : newest.Mass));
             if (note != null && note.Launcher.Length > 0) bits.Add("on " + note.Launcher);
             if (f.Facility == "SPH") bits.Add("SPH");
-            string hangarNote = NoteFor(newest.Path);
-            if (!string.IsNullOrEmpty(hangarNote)) bits.Add($"<color={Look.Html(Look.Good)}>{hangarNote}</color>");
 
             // Mark buttons, newest on the right; the five newest are shown.
             List<CraftFile> marks = f.Marks.Skip(Math.Max(0, f.Marks.Count - 5)).ToList();
             float textW = w - 70 - 12 - marks.Count * 36;
             Kit.Line(row, 70, 9, textW, 24, f.Name, 17, Look.Ink, Look.Display, style: FontStyle.Bold);
             Kit.Line(row, 70, 33, textW, 18, string.Join(" · ", bits), 12, Look.Ink2);
+            if (!string.IsNullOrEmpty(hangarNote)) Kit.Line(row, 70, 50, w - 70 - 12, 16, hangarNote, 12, Look.Good);
             float mx = w - 12 - marks.Count * 36 + 4;
             foreach (CraftFile c in marks)
             {
@@ -578,7 +582,7 @@ namespace PhilsBuilds
                 mx += 36;
             }
             for (int i = 0; i < copies.Count; i++)
-                CopyRowUi(row, 60 + i * CopyH, w, copies[i].Item1, copies[i].Item2, copies[i].Item3, true);
+                CopyRowUi(row, head + i * CopyH, w, copies[i].Item1, copies[i].Item2, copies[i].Item3, true);
             return y + h;
         }
         void MarkChip(RectTransform parent, float x, float y, string label, bool old, bool selected, Action click, bool small = false)
@@ -730,8 +734,10 @@ namespace PhilsBuilds
         {
             Library.LoadStats(s);
             IList<CopyRow> copies = dim ? NoRows : RowsFor(s.Path);
+            string hangarNote = dim ? null : NoteFor(s.Path);
+            float head = string.IsNullOrEmpty(hangarNote) ? 58 : 66;
             bool selected = SelSub == s;
-            float h = 58 + copies.Count * CopyH;
+            float h = head + copies.Count * CopyH;
             RectTransform row = Kit.Panel(content, s.Name, x, y, w, h, selected ? Look.Wash(Look.Rail, 0.08f) : Look.Rail, selected ? Look.Amber : Look.Line, 8);
             Kit.Clicks(row, n => Later(() =>
             {
@@ -763,9 +769,8 @@ namespace PhilsBuilds
                 : $"Up to {Naming.Meters(s.Width)} wide. This payload is {Naming.Meters(payloadWidth)}.";
             else sub = $"Lifts {Naming.Tons(s.Rating)}{(s.Width > 0 ? " · up to " + Naming.Meters(s.Width) : "")}" +
                        $"{(s.Stages > 0 ? $" · {s.Stages} stage{(s.Stages == 1 ? "" : "s")}" : "")}{(s.Cost > 0 ? " · " + Naming.Funds(s.Cost) : "")}";
-            string hangarNote = dim ? null : NoteFor(s.Path);
-            if (!string.IsNullOrEmpty(hangarNote)) sub += $" · <color={Look.Html(Look.Good)}>{hangarNote}</color>";
             Kit.Line(row, 64, 30, textW + 60, 18, sub, 12, ink2);
+            if (!string.IsNullOrEmpty(hangarNote)) Kit.Line(row, 64, 47, w - 64 - 12, 16, hangarNote, 12, Look.Good);
 
             if (s.Rated && payloadKnown && !dim)
             {
@@ -777,7 +782,7 @@ namespace PhilsBuilds
             }
             else if (!s.Rated && s.Kind == SubKind.Launcher)
                 Track(Kit.Ghost(row, "Rate it", w - 12 - 76, 14, 76, 30, () => Later(() => { selectedSubPath = s.Path; selectedCopyKey = null; RebuildList(); RebuildDetail(); })));
-            for (int i = 0; i < copies.Count; i++) CopyRowUi(row, 58 + i * CopyH, w, s.Path, copies[i], null, false);
+            for (int i = 0; i < copies.Count; i++) CopyRowUi(row, head + i * CopyH, w, s.Path, copies[i], null, false);
             return y + h;
         }
 
