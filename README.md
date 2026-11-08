@@ -4,7 +4,12 @@
 > Phil Nutt designs it and play-tests it. He isn't a programmer, and no human has reviewed the code.
 > Back up your saves before trying it.
 
-A Kerbal Space Program 1.12 mod for naming and organizing your craft like a real space program.
+A Kerbal Space Program 1.12 mod for naming and organizing your craft like a real space program. It's one
+of Phil's mods, alongside [Phil's Iterative Parts](https://github.com/phillipnutt/phils-iterative-parts)
+and [Phil's Part Hider](https://github.com/phillipnutt/phils-part-hider), and shares their look.
+
+**This is an early version (0.1).** Saving, families and marks have been play-tested. Picking launchers
+from the library and spent-stage names in flight are newer.
 
 - **Families and marks.** Craft are saved into families, like Thunderbolt I, II, III. Older marks stay and
   still load. A program built in pieces is several families sharing a name, like Haven, Haven Lab and
@@ -23,6 +28,30 @@ A Kerbal Space Program 1.12 mod for naming and organizing your craft like a real
 Craft are stored as real folders, `Ships/VAB/<Category>/<Family>/`, so they stay sorted in the stock
 load dialog even without this mod. Subassemblies stay in the stock Subassemblies folder. What kind each one
 is, and launcher ratings, are kept in `saves/<save>/PhilsBuilds.cfg`.
+
+## Install
+
+Copy `GameData/PhilsBuilds` from the release zip into your KSP `GameData` folder. No other mods needed.
+
+While it's installed:
+- The editor's Load button opens Phil's Builds' library in place of the stock craft loader.
+- The stock Subassemblies tab in the parts list is hidden; subassemblies are in the library.
+- The Save button asks where a new design goes, and for a filed one, whether to save over the open mark
+  or as the next one.
+
+Remove the folder to go back to stock. Your craft stay where they are.
+
+## Using it
+
+- **Save** a new design: pick its category, and take a dealt name or type your own. It's filed as the
+  first mark of a new family.
+- **Next mark:** load a mark, change it, press Save, and pick Save as next.
+- **Launchers:** build one on its own, open the library's Launchers tab and click the drop box (or pick
+  up its top part first). Give it a rating, tons to orbit and widest payload, from your own test flights.
+- **Pick a launcher:** build the payload, open the Launchers tab, and click one that fits. It comes up
+  on the cursor, ready to attach underneath.
+- **Unfiled craft** from before you installed the mod are listed under Unfiled. File them into families
+  from there.
 
 ## Adding names
 
@@ -46,8 +75,15 @@ Launcher lists also take `class = Light`, `Medium`, `Heavy` or `SuperHeavy`.
 - hear when parts from a design are placed in the editor or saved;
 - show its own built copies of a design (a hangar) in the library window.
 
-Nothing changes unless a mod uses it.
+Nothing changes unless a mod uses it. Reference `PhilsBuilds.dll` and declare
+`[KSPAssemblyDependency("PhilsBuilds", 0, 1)]`.
+
+## Building
+
+MSBuild on `PhilsBuilds.csproj`. It expects KSP at the default Steam location; pass `/p:KspDir="..."` for
+another install. `Tools/Test-Core.ps1` checks the naming rules, `Tools/Check-Names.ps1` checks the name
+lists, and `Tools/Make-Release.ps1` builds the release zip.
 
 ## License
 
-MIT. Copyright Phil Nutt.
+MIT. Copyright Phil Nutt. See [LICENSE](LICENSE).
