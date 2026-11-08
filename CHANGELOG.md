@@ -28,6 +28,12 @@
 - A craft built on a launcher that's since been deleted says so: "BUILT ON Haytor 002 · deleted".
 - A saved launcher or subassembly file is written again after other mods are told about the save, so
   anything they put on the parts (the Reusability Suite's design id) is in the file too.
+- Save with a launcher or upper stage open on its own (loaded, or saved from the editor) asks "Save over
+  Rockall 002" or "Save as Rockall 002 II", as it does for a craft's marks. A link saves it as a new craft
+  instead. The drop box asks the same when nothing is held.
+- The Save panel's "What is it?" list ends with Launcher and Upper stage, which save the craft to the
+  Launchers tab with its rating.
+- Re-rating a launcher that's open in the editor renames the craft along with it.
 
 ## 0.1.0 (2026-11-07)
 

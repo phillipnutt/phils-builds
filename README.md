@@ -47,8 +47,11 @@ Remove the folder to go back to stock. Your craft stay where they are.
 - **Save** a new design: pick its category, and take a dealt name or type your own. It's filed as the
   first mark of a new family.
 - **Next mark:** load a mark, change it, press Save, and pick Save as next.
-- **Launchers:** build one on its own, open the library's Launchers tab and click the drop box (or pick
-  up its top part first). Give it a rating, tons to orbit and widest payload, from your own test flights.
+- **Launchers:** build one on its own, then press Save and pick Launcher at the end of "What is it?" (or
+  click the drop box on the library's Launchers tab, or pick up its top part first and drop it there).
+  Give it a rating, tons to orbit and widest payload, from your own test flights.
+- **Change a launcher:** load it, change it, press Save, and pick Save over or Save as its next mark
+  (Rockall 002 II). Upper stages work the same way.
 - **Pick a launcher:** build the payload, open the Launchers tab, and click one that fits. It comes up
   on the cursor, ready to attach underneath.
 - **Fly a launcher on its own:** with nothing in the editor, press Load on a launcher (or double-click it).

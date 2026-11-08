@@ -346,6 +346,10 @@ namespace PhilsBuilds
 
         public static SubFile SubNamed(string name) => Subs.FirstOrDefault(s => Naming.SameName(s.Name, name));
 
+        // A launcher or upper stage of this name.
+        public static SubFile StageNamed(string name) =>
+            string.IsNullOrEmpty(name) ? null : Subs.FirstOrDefault(s => (s.Kind == SubKind.Launcher || s.Kind == SubKind.UpperStage) && Naming.SameName(s.Name, name));
+
         public static bool HasLauncher(string name) => Subs.Any(s => s.Kind == SubKind.Launcher && Naming.SameName(s.Name, name));
 
         // A launcher of this name was in the library and has been renamed or deleted.

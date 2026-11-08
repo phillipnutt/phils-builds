@@ -250,7 +250,9 @@ namespace PhilsBuilds
             if (dialog != null) return;
             if (Stock.Ship == null || Stock.Ship.parts.Count == 0) { QuickSave(); return; }
             Library.Scan();
-            if (!CurrentFiling(out _, out string family)) Show(new SavePanel(this, null));
+            SubFile stage = OpenStage();
+            if (stage != null) Show(new StageMarkDialog(this, stage));
+            else if (!CurrentFiling(out _, out string family)) Show(new SavePanel(this, null));
             // A name typed in the box that isn't a mark of this family ("Orpheus" in the
             // Orpheus I family) would save a stray file into the folder, so ask instead.
             else if (!FitsFamily(Stock.ShipName, family))
@@ -274,9 +276,49 @@ namespace PhilsBuilds
         public void OpenSave()
         {
             Library.Scan();
-            if (CurrentFiling(out _, out string family) && Stock.Ship != null && Stock.Ship.parts.Count > 0 && FitsFamily(Stock.ShipName, family))
+            SubFile stage = OpenStage();
+            if (stage != null) Show(new StageMarkDialog(this, stage));
+            else if (CurrentFiling(out _, out string family) && Stock.Ship != null && Stock.Ship.parts.Count > 0 && FitsFamily(Stock.ShipName, family))
                 Show(new NextMarkDialog(this, family));
             else Show(new SavePanel(this, null));
+        }
+
+        public void OpenNewDesign() => Show(new SavePanel(this, null));
+
+        public void OpenStageSave(SubFile s) => Show(new StageMarkDialog(this, s));
+
+        // The launcher or upper stage from the library that the craft in the editor is, on
+        // its own: the craft carries its name (it was loaded, or saved from here), and nothing
+        // is built on it. Null otherwise. (A payload on an upper stage can't be told apart;
+        // its Save dialog has a link to save a new craft instead.)
+        public SubFile OpenStage()
+        {
+            if (Stock.Ship?.parts == null || Stock.Ship.parts.Count == 0 || EditorLogic.RootPart == null) return null;
+            SubFile s = Library.StageNamed(Stock.ShipName);
+            if (s == null) return null;
+            if (s.Kind == SubKind.Launcher && LauncherTags.PayloadOf(Stock.Ship).Count > 0) return null;
+            return s;
+        }
+
+        // Saves the craft in the editor as a launcher or upper stage already in the library:
+        // over it (the same name), or as its next mark.
+        public void SaveStage(SubFile current, string name, int mark)
+        {
+            if (current == null || EditorLogic.RootPart == null) return;
+            try
+            {
+                var info = new SubFile
+                {
+                    Kind = current.Kind, Family = current.Family, Group = current.Group, Rating = current.Rating, Width = current.Width,
+                    Notes = current.Notes, Style = current.Style, Mark = mark,
+                };
+                SaveSub(null, EditorLogic.RootPart, name, info);
+            }
+            catch (Exception e)
+            {
+                Debug.LogError($"[PhilsBuilds] Saving {name}: {e}");
+                Say($"Couldn't save {name}: {e.Message}");
+            }
         }
 
         public void QuickSave()
@@ -537,7 +579,9 @@ namespace PhilsBuilds
             }
             else if (s != null && !Naming.SameName(s.Name, name) || s != null && s.Name != name)
             {
+                string was = s.Name;
                 Library.RenameSub(s, name);
+                FollowRename(was, name);
             }
             if (s == null) return;
             s.Kind = info.Kind;
@@ -552,7 +596,7 @@ namespace PhilsBuilds
             EditorPartList.Instance?.RefreshSubassemblies();
             string path = s.Path;
             Refresh(selectSub: Library.SubNamed(name));         // reads the library again, with this one's kind
-            if (held != null && info.Kind == SubKind.Launcher) BecomeLauncher(held, name);
+            if (held != null && stage) BecomeStage(held, name, info.Kind);
             Say($"Saved {name}");
             if (saved == null) return;
             BuildsApi.RaiseSaved(BuildsApi.OfFile(path), !existed, saved);
@@ -561,20 +605,29 @@ namespace PhilsBuilds
             if (BuildsApi.HasSavedListeners && Stock.SaveSubassembly(name, "", held, picture: false) != null) StripLauncherNames(path, stage);
         }
 
-        // The parts just saved as a launcher are that launcher now, though they may have
-        // come from another one (deleted, or still in the library): they get its stage names,
-        // and a craft that's only this launcher, still named after the old one, takes its name.
-        void BecomeLauncher(Part held, string launcher)
+        // The parts just saved as a launcher or upper stage are that stage now, though they
+        // may have come from another one (deleted, or still in the library): a launcher's get
+        // its stage names, and a craft that's only this stage, still named after a stage (or
+        // not named), takes its name, so Save knows it next time.
+        void BecomeStage(Part held, string name, SubKind kind)
         {
             try
             {
                 var tree = new System.Collections.Generic.HashSet<Part>(LauncherTags.Subtree(held));
                 bool whole = Stock.HoldingCraft || (Stock.Ship?.parts?.All(tree.Contains) ?? true);
-                LauncherTags.Tag(held, launcher);
-                if (whole && (Stock.IsDefaultName(Stock.ShipName) || LauncherTags.Known(Stock.ShipName))) Stock.ShipName = launcher;
+                if (kind == SubKind.Launcher) LauncherTags.Tag(held, name);
+                string now = Stock.ShipName;
+                if (whole && (Stock.IsDefaultName(now) || LauncherTags.Known(now) || Library.StageNamed(now) != null)) Stock.ShipName = name;
                 Relabel();
             }
-            catch (Exception e) { Debug.LogWarning($"[PhilsBuilds] Naming {launcher}'s stages: {e.Message}"); }
+            catch (Exception e) { Debug.LogWarning($"[PhilsBuilds] Naming {name}'s stages: {e.Message}"); }
+        }
+
+        // A launcher or upper stage renamed in the library: a craft in the editor named after
+        // it follows, so Save still knows it.
+        static void FollowRename(string was, string now)
+        {
+            if (Naming.SameName(Stock.ShipName, was)) Stock.ShipName = now;
         }
 
         // A subassembly saved from a craft that was built on a library launcher carries
@@ -624,7 +677,7 @@ namespace PhilsBuilds
                     string newName = Naming.Launcher(s.Family, tons, s.Style, s.Mark);
                     if (Library.SubNamed(newName) == null)
                     {
-                        try { Library.RenameSub(s, newName); EditorPartList.Instance?.RefreshSubassemblies(); }
+                        try { string was = s.Name; Library.RenameSub(s, newName); FollowRename(was, newName); EditorPartList.Instance?.RefreshSubassemblies(); }
                         catch (Exception e) { Debug.LogWarning($"[PhilsBuilds] Couldn't rename {s.Name}: {e.Message}"); }
                     }
                 }

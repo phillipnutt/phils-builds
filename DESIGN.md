@@ -167,7 +167,7 @@ Phil let both sessions build overnight without his sign-off ("Build freely"), so
   like "SINCE MARK I: +2.3 t · +1,200 funds · +3 parts · +1 stage", so a family reads like PIP's
   iterations. Figures that didn't change are left out, and the line is hidden if none did.
 
-## Fixed after Phil's play-test 2 (2026-11-08, tested in game: 127 checks, 0 failures)
+## Fixed after Phil's play-test 2 (2026-11-08, tested in game: 153 checks, 0 failures)
 
 Found by Phil with Argo I, Haytor 002 and Rockall 002; written up by the suite's session.
 - **Load put a launcher underground.** A subassembly file keeps the parts where the cursor held them when
@@ -193,9 +193,22 @@ Found by Phil with Argo I, Haytor 002 and Rockall 002; written up by the suite's
   suite's stamps reached only the live parts. A subassembly save now writes the file a second time after
   `DesignSaved` (only when something listens), from the same parts in the same order. The suite says craft
   files don't need this: it never trusts design ids in a file, and re-stamps on every placement.
-- **Not built yet: saving over a launcher** (needs Phil's OK on a mockup). The Save button with a lone
-  launcher open would ask "Save over Rockall 002" or "Save as Rockall 002 II", like a craft's marks. The
-  Save panel's "What is it?" list would get Launcher and Upper stage, with the rating there.
+- **Saving over a launcher** (agreed with Phil on a mockup, 2026-11-08; tested in game, 153 checks).
+  - "Open stage": the craft's name is a library launcher's or upper stage's, and (for a launcher) nothing
+    is built on it, so `PayloadOf` is empty. A payload on an upper stage can't be told apart, so the
+    dialog has a "Save as a new craft instead" link.
+  - Save (the editor's button, or the library's Save…) with an open stage asks "Save over Rockall 002"
+    (the default) or "Save as Rockall 002 II". The next mark comes after the newest of the same family
+    and rating, and keeps the rating, width, notes and style. It's a new design in the same line.
+  - Saving over writes the same file and keeps the design id (`IsNewFile` false). KSP's
+    `ShipConstruction.SaveSubassembly` overwrites in place.
+  - The drop box, clicked with nothing held, asks the same when a stage is open.
+  - The Save panel's "What is it?" list ends with "Launcher · to the Launchers tab" and "Upper stage · to
+    the Launchers tab". They hand over to the subassembly dialog for the whole craft, which asks for the
+    rating. The popup list has no headings, so the labels say where it goes.
+  - After any stage save of the whole craft, a craft still named after a stage (or not named) takes the
+    new name, and a re-rated launcher's rename carries the editor's craft name with it. So Save keeps
+    recognising it.
 
 ## Banked ideas (Phil's play-test thoughts, not decided)
 

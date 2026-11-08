@@ -1021,6 +1021,8 @@ namespace PhilsBuilds
                 SubKind kind = tab == Tab.Launchers ? SubKind.Launcher : SubKind.Block;
                 Part held = Stock.Held;
                 if (held != null) Later(() => host.OpenSubDialog(null, held, kind));
+                // The craft is a launcher or upper stage from the library: over it, or its next mark.
+                else if (host.OpenStage() is SubFile open) Later(() => host.OpenStageSave(open));
                 else if (EditorLogic.RootPart != null && Stock.Ship != null && Stock.Ship.parts.Count > 0)
                     Later(() => host.OpenSubDialog(null, EditorLogic.RootPart, kind, wholeCraft: true));
             });

@@ -193,6 +193,17 @@ namespace PhilsBuilds
             return y + 44;
         }
 
+        // One of two big choices side by side (save over, or as the next mark).
+        protected void Option(float x, float y, float w, string title, string text, bool on, Action pick)
+        {
+            Btn b = Track(Btn.Make(body, title, x, y, w, 100, () => Later(pick))
+                .Skin(Look.Round(Look.Rail, Look.Line, 9), Look.Round(Look.Rail, Look.AmberLine, 9), Look.Round(Look.Wash(Look.Rail, 0.08f), Look.Amber, 9)));
+            b.On = on;
+            b.Refresh();
+            Kit.Line(b.Rt, 14, 12, w - 28, 26, title, 19, on ? Look.Amber : Look.Ink, Look.Display, style: FontStyle.Bold);
+            Kit.Text(b.Rt, 14, 40, w - 28, 52, text, 12, Look.Ink2, align: TextAnchor.UpperLeft);
+        }
+
         protected void OpenPopup(RectTransform anchor, IList<string> options, Action<int> pick)
         {
             ClosePopup();
@@ -313,8 +324,9 @@ namespace PhilsBuilds
 
         // A craft started from a launcher opened on its own carries the launcher's name;
         // what's built on it is a new design, so it gets a name of its own.
-        static bool IsStageName(string n) =>
-            Library.Subs.Any(s => (s.Kind == SubKind.Launcher || s.Kind == SubKind.UpperStage) && Naming.SameName(s.Name, n));
+        static bool IsStageName(string n) => Library.StageNamed(n) != null;
+
+        public static string StageLabel(SubKind kind) => (kind == SubKind.Launcher ? "Launcher" : "Upper stage") + " · to the Launchers tab";
 
         List<Family> FamiliesHere => Library.Families.Where(f => f.Category == cat && f.Facility == Facility).OrderBy(f => f.Name).ToList();
 
@@ -363,8 +375,20 @@ namespace PhilsBuilds
             float y = 16;
             y = Label(y, "What is it?");
             List<Category> cats = Category.Craft.ToList();
-            y = Select(y, cat.Label, Category.GroupLabel(cat.Group), cats.Select(c => c.Label).ToList(), i =>
+            List<string> labels = cats.Select(c => c.Label).ToList();
+            // The craft in the editor can also be saved as a stage, to the Launchers tab, with
+            // its rating (Phil, 2026-11-08: the drop box shouldn't be the only way).
+            bool stages = filing == null && EditorLogic.RootPart != null;
+            if (stages) { labels.Add(StageLabel(SubKind.Launcher)); labels.Add(StageLabel(SubKind.UpperStage)); }
+            y = Select(y, cat.Label, Category.GroupLabel(cat.Group), labels, i =>
             {
+                if (i >= cats.Count)
+                {
+                    SubKind kind = i == cats.Count ? SubKind.Launcher : SubKind.UpperStage;
+                    Close();
+                    host.OpenSubDialog(null, EditorLogic.RootPart, kind, wholeCraft: true);
+                    return;
+                }
                 cat = cats[i];
                 lastCategory = cat.Id;
                 existing = null;
@@ -568,18 +592,62 @@ namespace PhilsBuilds
         static string Tail(string name) =>
             Marks.TryParse(name, out _, out MarkStyle s, out int m) ? "Mark " + Marks.Short(s, m) : name;
 
-        void Option(float x, float y, float w, string title, string text, bool on, Action pick)
+        protected override void BuildFoot() =>
+            FootButtons(asNext ? $"Save {Tail(next)}" : "Save", () => { Close(); if (asNext) host.SaveAs(next); else host.QuickSave(); }, true);
+    }
+
+    // ---- Save a launcher or upper stage that's open on its own -----------------------------------
+
+    // The craft in the editor is a launcher or upper stage from the library with nothing
+    // built on it (loaded, or saved from here). Save asks what it asks for a craft's marks:
+    // over it, or as its next mark (Phil, 2026-11-08: "Save over Haytor 002" or "next mark").
+    public class StageMarkDialog : Dialog
+    {
+        readonly SubFile current;
+        readonly string next;
+        readonly int nextMark;
+        bool asNext;
+
+        public StageMarkDialog(BuildsEditor host, SubFile current) : base(host)
         {
-            Btn b = Track(Btn.Make(body, title, x, y, w, 100, () => Later(pick))
-                .Skin(Look.Round(Look.Rail, Look.Line, 9), Look.Round(Look.Rail, Look.AmberLine, 9), Look.Round(Look.Wash(Look.Rail, 0.08f), Look.Amber, 9)));
-            b.On = on;
-            b.Refresh();
-            Kit.Line(b.Rt, 14, 12, w - 28, 26, title, 19, on ? Look.Amber : Look.Ink, Look.Display, style: FontStyle.Bold);
-            Kit.Text(b.Rt, 14, 40, w - 28, 52, text, 12, Look.Ink2, align: TextAnchor.UpperLeft);
+            this.current = current;
+            // The next mark comes after the newest of its family (and, for a launcher, of
+            // its rating: "Haytor 003" is another line), and never takes a name in use.
+            string family = current.Family.Length > 0 ? current.Family : current.Name;
+            int top = Math.Max(current.Mark, 1);
+            foreach (SubFile s in Library.Subs)
+                if (s.Kind == current.Kind && current.Family.Length > 0 && Naming.SameName(s.Family, current.Family) &&
+                    (current.Kind != SubKind.Launcher || Naming.Code(s.Rating) == Naming.Code(current.Rating)))
+                    top = Math.Max(top, s.Mark);
+            nextMark = top + 1;
+            next = NameFor(family, nextMark);
+            for (int i = 0; i < 50 && Library.SubNamed(next) != null; i++) next = NameFor(family, ++nextMark);
+            string what = current.Kind == SubKind.Launcher ? "launcher" : "upper stage";
+            Open($"Save {current.Name}", $"You have the {what} {current.Name} open. What did you make?", 560, 380);
+        }
+
+        string NameFor(string family, int mark) =>
+            current.Kind == SubKind.Launcher && current.Rating > 0 ? Naming.Launcher(family, current.Rating, current.Style, mark) : Naming.Stage(family, current.Style, mark);
+
+        protected override void BuildBody()
+        {
+            float half = (W - 2 * Pad - 10) / 2;
+            string lifts = current.Kind == SubKind.Launcher && current.Rated ? $", lifts {Naming.Tons(current.Rating)}" : "";
+            Option(Pad, 18, half, $"Save over {current.Name}", $"Small fixes. It stays {current.Name}{lifts}.", !asNext, () => { asNext = false; Rebuild(); });
+            Option(Pad + half + 10, 18, half, $"Save as {next}", $"A new version. {current.Name} stays in the library and still loads.",
+                asNext, () => { asNext = true; Rebuild(); });
+            Kit.Text(body, Pad, 132, W - 2 * Pad, 60,
+                "Pick one and press the orange button (or Enter). Cancel saves nothing. Built something on it? Save it as a new craft instead.", 12, Look.Ink2,
+                align: TextAnchor.UpperLeft);
         }
 
         protected override void BuildFoot() =>
-            FootButtons(asNext ? $"Save {Tail(next)}" : "Save", () => { Close(); if (asNext) host.SaveAs(next); else host.QuickSave(); }, true);
+            FootButtons(asNext ? "Save new mark" : "Save over", () =>
+            {
+                Close();
+                if (asNext) host.SaveStage(current, next, nextMark);
+                else host.SaveStage(current, current.Name, current.Mark);
+            }, true, "Save as a new craft instead", () => { Close(); host.OpenNewDesign(); });
     }
 
     // ---- Save or file a subassembly --------------------------------------------------------------
