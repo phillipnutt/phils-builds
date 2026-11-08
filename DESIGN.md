@@ -149,6 +149,12 @@ Phil let both sessions build overnight without his sign-off ("Build freely"), so
   - a launcher with no payload has its top part carry the craft's name at 2, or it would launch named
     after its own top stage;
   - craft tagged at the old values are upgraded the next time they're edited.
+- **What counts as the payload** (after an independent review found clamps taking the craft's name):
+  - With the payload built first, it's everything joined to the craft's root without crossing the launcher.
+  - With the launcher placed first, it's whatever is built on the launcher's top piece.
+  - Clamps, fins or boosters added to a lower stage are neither: they drop with their stage and don't count
+    toward the payload's weight.
+  - Only stage names of launchers in this save's library count, so names a player set by hand are left alone.
 - **A dropped piece with a probe core or crew pod stays flyable.** It keeps its stage name but flies as a
   probe or ship, not debris, because KSP's [ and ] keys skip debris and Phil puts probe cores on first stages
   to land them. Suggested by the suite's session; pieces without one are still debris.
