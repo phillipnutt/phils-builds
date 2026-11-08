@@ -213,6 +213,19 @@ suite references `PhilsBuilds.dll` directly.
 Timing: the suite needs these at its own step 5 (the Phil's Builds link). Its first four steps don't need
 them.
 
+**The suite's reply (2026-11-07):** it accepts the plan as written, with three notes. Phil hasn't said to
+build it yet.
+- **When DesignPlaced fires:** once the parts exist, after `SpawnConstruct` or after a load finishes.
+  - It also fires for constructs built through `ICopies.Build`. The suite skips parts it has already
+    stamped.
+  - A construct held on the cursor isn't in `EditorLogic.fetch.ship.parts` until it's attached.
+    Exception: on an empty editor it becomes the ship. The event carries the `Part` objects themselves,
+    so the suite can stamp them either way.
+- **The suite keys on the stable design Ids.** It keeps its own copy of the design file with each build
+  and launch record, as suggested in 3.
+- **Phil's Builds strips nothing from saved files.** The suite gives fresh serials to any parts that Phil's
+  Builds loads or merges. Only the suite's own hangar picks keep their serials.
+
 ## Notes for building
 
 - KSP 1.12's craft browser has a folder tree (`KSP.UI.Screens.DirectoryController` exists). Confirm in game.
