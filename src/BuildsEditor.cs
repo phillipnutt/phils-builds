@@ -556,7 +556,8 @@ namespace PhilsBuilds
                     {
                         string pri = n.GetValue("priority");
                         // Stage labels anywhere; the craft name a lone launcher's top part carried.
-                        bool ours = n.HasValue("name") && ((pri == label || pri == old) && n.GetValue("type") == "Debris" || i == 0 && pri == top);
+                        bool ours = n.HasValue("name") && ((pri == label || pri == old) && (n.GetValue("type") == "Debris" || LauncherTags.IsLabelName(n.GetValue("name"))) ||
+                                                           i == 0 && pri == top);
                         if (!ours) continue;
                         parts[i].RemoveNode(n);
                         changed = true;

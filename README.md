@@ -23,7 +23,8 @@ from the library and spent-stage names in flight are newer.
 - **One library window.** It replaces the stock craft loader and subassembly list, and opens from the
   editor's Load button.
 - **Spent-stage names.** A launcher picked from the library names the pieces that fall off it, such as
-  "Cypress 010 Booster" and "Cypress 010 Stage 1", using KSP's own per-part vessel naming. They stay debris.
+  "Cypress 010 Booster" and "Cypress 010 Stage 1", using KSP's own per-part vessel naming. They're debris,
+  unless a piece has its own probe core or crew pod: then it stays flyable, under its stage name.
 
 Craft are stored as real folders, `Ships/VAB/<Category>/<Family>/`, so they stay sorted in the stock
 load dialog even without this mod. Subassemblies stay in the stock Subassemblies folder. What kind each one

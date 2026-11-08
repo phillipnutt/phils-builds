@@ -9,6 +9,14 @@
 - With nothing in the editor, a launcher or upper stage can be loaded as the craft itself (Load, or a
   double-click), as well as picked up.
 - The Save panel deals a new name when the craft still carries a launcher's name.
+- Fixed: spent stages never got their names in flight ("Oak 030 Stage 1"). KSP only lets parts with a
+  naming priority above 0 name a vessel, and 0.1.0 used -1. Craft tagged by 0.1.0 are fixed the next time
+  they're edited.
+- A dropped piece with its own probe core or crew pod stays flyable (a probe or ship) under its stage name;
+  only pieces without one are debris. KSP's [ and ] keys skip debris.
+- A launcher flown on its own launches under the craft's name.
+- Launchers and subassemblies have pictures in the library, taken when they're saved from the drop box,
+  or the first time an older one is picked up or loaded.
 
 ## 0.1.0 (2026-11-07)
 

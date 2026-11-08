@@ -4,7 +4,8 @@
 // When a craft splits, or is launched, KSP names each piece after its
 // highest-priority named part, counting only priorities above 0. So a launcher
 // picked from the library gets every part named after it, at priority 1, as
-// debris: "Cypress 010 Booster", "Cypress 010 Stage 1". The payload gets the
+// debris: "Cypress 010 Booster", "Cypress 010 Stage 1" (a piece with its own probe
+// core or pod stays a probe or ship, so it can still be flown). The payload gets the
 // ship's name at priority 3, so the launched craft and the payload keep their own
 // name. A launcher with no payload (flown on its own) has its top part carry the
 // ship's name at priority 2. Everything stays stock data in the craft file;
@@ -30,10 +31,22 @@ namespace PhilsBuilds
 
         static readonly Regex Label = new Regex(@"^(.*?) (Stage \d+|Booster)$");
 
-        // A launcher part, named for the piece it drops away with.
+        // A launcher part, named for the piece it drops away with. Debris, or (a piece with
+        // its own probe core or pod) a flyable type with a stage label for a name.
         public static bool IsLabel(Part p) =>
             p != null && p.vesselNaming != null && (p.vesselNaming.namingPriority == LauncherPriority || p.vesselNaming.namingPriority == OldLauncherPriority) &&
-            p.vesselNaming.vesselType == VesselType.Debris && !string.IsNullOrEmpty(p.vesselNaming.vesselName);
+            !string.IsNullOrEmpty(p.vesselNaming.vesselName) && (p.vesselNaming.vesselType == VesselType.Debris || Label.IsMatch(p.vesselNaming.vesselName));
+
+        public static bool IsLabelName(string name) => !string.IsNullOrEmpty(name) && Label.IsMatch(name);
+
+        // What a launcher piece flies as once it's dropped: debris, unless it can be flown.
+        // KSP's [ and ] keys skip debris, and Phil gives first stages probe cores to land them.
+        static VesselType PieceType(IEnumerable<Part> piece)
+        {
+            List<Part> command = piece.Where(p => p.FindModuleImplementing<ModuleCommand>() != null).ToList();
+            if (command.Count == 0) return VesselType.Debris;
+            return command.Any(p => p.CrewCapacity > 0) ? VesselType.Ship : VesselType.Probe;
+        }
 
         // A lone launcher's top part, carrying the ship's name. It's the craft's root, or
         // sits on another launcher part (after the craft was re-rooted).
@@ -45,7 +58,7 @@ namespace PhilsBuilds
 
         // The payload name this mod set (now, or as 0.1.0 did).
         static bool IsOurPayload(Part p) =>
-            p?.vesselNaming != null && p.vesselNaming.vesselType != VesselType.Debris &&
+            p?.vesselNaming != null && p.vesselNaming.vesselType != VesselType.Debris && !IsLabel(p) &&
             (p.vesselNaming.namingPriority == PayloadPriority || p.vesselNaming.namingPriority == OldPayloadPriority);
 
         // The vessel type a payload named by this mod has, if there is one.
@@ -136,12 +149,14 @@ namespace PhilsBuilds
             }
             // Every launcher part gets its piece's label (a lone launcher's top part too, for
             // now: EnsurePayload gives it the ship's name back if there's still no payload).
+            var types = heads.ToDictionary(h => h, h => PieceType(launcher.Where(p => headOf[p] == h)));
             foreach (Part p in launcher)
             {
                 string label = labels[headOf[p]];
+                VesselType type = types[headOf[p]];
                 VesselNaming n = p.vesselNaming;
-                if (n.vesselName != label || n.vesselType != VesselType.Debris || n.namingPriority != LauncherPriority)
-                    p.vesselNaming = new VesselNaming { vesselName = label, vesselType = VesselType.Debris, namingPriority = LauncherPriority };
+                if (n.vesselName != label || n.vesselType != type || n.namingPriority != LauncherPriority)
+                    p.vesselNaming = new VesselNaming { vesselName = label, vesselType = type, namingPriority = LauncherPriority };
             }
 
             EnsurePayload(ship, set, shipName, payloadType, ref lastPayloadName);

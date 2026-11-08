@@ -142,6 +142,21 @@ Phil let both sessions build overnight without his sign-off ("Build freely"), so
   filed. Double-clicking a launcher in an empty editor loads it too.
 - **The Save panel deals a new name** when the name box holds a launcher's or upper stage's name, since a
   payload built on a loaded launcher is a new design.
+- **Fixed: spent-stage names never worked in flight.** KSP names a vessel after its highest-priority named
+  part, but only counts priorities above 0 (`VesselNaming.FindPriorityNamePart`, used by `Part.decouple`
+  and at launch). 0.1.0 put launcher parts at -1, so dropped stages got KSP's own "<craft> Debris". Now:
+  - stage labels at priority 1, the payload's name at 3;
+  - a launcher with no payload has its top part carry the craft's name at 2, or it would launch named
+    after its own top stage;
+  - craft tagged at the old values are upgraded the next time they're edited.
+- **A dropped piece with a probe core or crew pod stays flyable.** It keeps its stage name but flies as a
+  probe or ship, not debris, because KSP's [ and ] keys skip debris and Phil puts probe cores on first stages
+  to land them. Suggested by the suite's session; pieces without one are still debris.
+- **Pictures of launchers and subassemblies** (new, not asked for). KSP takes no thumbnails of
+  subassemblies, so the Launchers and Subassemblies tabs showed a generic glyph. Phil's Builds takes its own
+  with KSP's craft-thumbnail camera. It does this when one is saved from the drop box, and the first time an
+  older one is picked up or loaded. The rest of the editor is hidden for that one render. The pictures sit
+  in `<KSP>/thumbs` as `<save>_Subassemblies_<name>.png`, and follow renames and deletes.
 
 ## Banked ideas (Phil's play-test thoughts, not decided)
 
