@@ -1,12 +1,19 @@
 // Spent-stage names, done with KSP's own per-part vessel naming.
 //
 // Any part can carry a vessel name, type and priority (stock "Rename Vessel").
-// When a craft splits, KSP names each new piece after its highest-priority named
-// part. So a launcher picked from the library gets every part named after it,
-// at a low priority, as debris: "Cypress 010 Booster", "Cypress 010 Stage 1".
-// The payload gets the ship's name at a higher priority, so the launched craft
-// and the payload keep their own name. Everything stays stock data in the craft
-// file; nothing is renamed or retyped in flight by this mod.
+// When a craft splits, or is launched, KSP names each piece after its
+// highest-priority named part, counting only priorities above 0. So a launcher
+// picked from the library gets every part named after it, at priority 1, as
+// debris: "Cypress 010 Booster", "Cypress 010 Stage 1". The payload gets the
+// ship's name at priority 3, so the launched craft and the payload keep their own
+// name. A launcher with no payload (flown on its own) has its top part carry the
+// ship's name at priority 2. Everything stays stock data in the craft file;
+// nothing is renamed or retyped in flight by this mod.
+//
+// Phil's Builds 0.1.0 used -1 for the launcher and 1 for the payload. KSP skips
+// priorities below 1, so those stage names never showed in flight (found
+// 2026-11-07 by reading Part.decouple). Craft tagged then are upgraded the next
+// time they're edited.
 
 using System;
 using System.Collections.Generic;
@@ -18,18 +25,40 @@ namespace PhilsBuilds
 {
     static class LauncherTags
     {
-        public const int LauncherPriority = -1, PayloadPriority = 1;
+        public const int LauncherPriority = 1, RootPriority = 2, PayloadPriority = 3;
+        public const int OldLauncherPriority = -1, OldPayloadPriority = 1;      // Phil's Builds 0.1.0
 
         static readonly Regex Label = new Regex(@"^(.*?) (Stage \d+|Booster)$");
 
-        public static bool IsLauncherPart(Part p) =>
-            p != null && p.vesselNaming != null && p.vesselNaming.namingPriority == LauncherPriority &&
+        // A launcher part, named for the piece it drops away with.
+        public static bool IsLabel(Part p) =>
+            p != null && p.vesselNaming != null && (p.vesselNaming.namingPriority == LauncherPriority || p.vesselNaming.namingPriority == OldLauncherPriority) &&
             p.vesselNaming.vesselType == VesselType.Debris && !string.IsNullOrEmpty(p.vesselNaming.vesselName);
+
+        // A lone launcher's top part, carrying the ship's name. It's the craft's root, or
+        // sits on another launcher part (after the craft was re-rooted).
+        public static bool IsRootCarrier(Part p) =>
+            p != null && p.vesselNaming != null && p.vesselNaming.namingPriority == RootPriority && p.vesselNaming.vesselType != VesselType.Debris &&
+            !string.IsNullOrEmpty(p.vesselNaming.vesselName) && (p.parent == null || IsLabel(p.parent));
+
+        public static bool IsLauncherPart(Part p) => IsLabel(p) || IsRootCarrier(p);
+
+        // The payload name this mod set (now, or as 0.1.0 did).
+        static bool IsOurPayload(Part p) =>
+            p?.vesselNaming != null && p.vesselNaming.vesselType != VesselType.Debris &&
+            (p.vesselNaming.namingPriority == PayloadPriority || p.vesselNaming.namingPriority == OldPayloadPriority);
+
+        // The vessel type a payload named by this mod has, if there is one.
+        public static VesselType? PayloadTypeIn(ShipConstruct ship)
+        {
+            Part p = ship?.parts?.FirstOrDefault(x => !IsLauncherPart(x) && IsOurPayload(x)) ?? ship?.parts?.FirstOrDefault(IsRootCarrier);
+            return p?.vesselNaming?.vesselType;
+        }
 
         // The launcher a tagged part came from: "Cypress 010 Stage 1" -> "Cypress 010".
         public static string LauncherOf(Part p)
         {
-            if (!IsLauncherPart(p)) return null;
+            if (!IsLabel(p)) return null;
             string n = p.vesselNaming.vesselName;
             Match m = Label.Match(n);
             return m.Success ? m.Groups[1].Value : n;
@@ -68,9 +97,10 @@ namespace PhilsBuilds
         public static void Relabel(ShipConstruct ship, string shipName, VesselType payloadType, ref string lastPayloadName)
         {
             if (ship?.parts == null || ship.parts.Count == 0) return;
+            if (!ship.parts.Any(IsLabel)) return;
             List<Part> launcher = ship.parts.Where(IsLauncherPart).ToList();
-            if (launcher.Count == 0) return;
             var set = new HashSet<Part>(launcher);
+            string fallback = launcher.Select(LauncherOf).FirstOrDefault(n => n != null);
 
             // Each launcher part belongs to the nearest piece head above it (itself included):
             // a decoupler, or the part where the launcher meets the payload.
@@ -97,42 +127,58 @@ namespace PhilsBuilds
             }
 
             var labels = new Dictionary<Part, string>();
-            foreach (IGrouping<string, Part> byLauncher in heads.GroupBy(h => LauncherOf(h)))
+            foreach (IGrouping<string, Part> byLauncher in heads.GroupBy(h => LauncherOf(h) ?? fallback))
             {
                 List<Part> stacked = byLauncher.Where(h => !Radial(h)).ToList();
                 int deepest = stacked.Count == 0 ? 0 : stacked.Max(Depth);
                 foreach (Part h in byLauncher)
                     labels[h] = byLauncher.Key + (Radial(h) ? " Booster" : " Stage " + (deepest - Depth(h) + 1));
             }
+            // Every launcher part gets its piece's label (a lone launcher's top part too, for
+            // now: EnsurePayload gives it the ship's name back if there's still no payload).
             foreach (Part p in launcher)
             {
                 string label = labels[headOf[p]];
-                if (p.vesselNaming.vesselName != label) p.vesselNaming.vesselName = label;
+                VesselNaming n = p.vesselNaming;
+                if (n.vesselName != label || n.vesselType != VesselType.Debris || n.namingPriority != LauncherPriority)
+                    p.vesselNaming = new VesselNaming { vesselName = label, vesselType = VesselType.Debris, namingPriority = LauncherPriority };
             }
 
             EnsurePayload(ship, set, shipName, payloadType, ref lastPayloadName);
         }
 
-        // The payload's name. Ours sits on the payload's top part at PayloadPriority and
-        // follows the ship name; a name the player set on a payload part is left alone.
+        // The craft's own name. With a payload, ours sits on the payload's top part at
+        // PayloadPriority and follows the ship name; a name the player set on a payload
+        // part, at a priority that beats the launcher's, is left alone. With no payload,
+        // the launcher's top part carries it at RootPriority, so a launcher flown on its own
+        // isn't named after its own top stage, as debris.
         public static void EnsurePayload(ShipConstruct ship, HashSet<Part> set, string shipName, VesselType payloadType, ref string lastPayloadName)
         {
             if (ship?.parts == null || string.IsNullOrEmpty(shipName)) return;
             List<Part> payload = ship.parts.Where(p => !set.Contains(p) && !IsLauncherPart(p)).ToList();
-            if (payload.Count == 0) return;
+            if (payload.Count == 0)
+            {
+                Part top = set.FirstOrDefault(p => p.parent == null || !set.Contains(p.parent));
+                if (top == null) return;
+                if (top.vesselNaming == null || top.vesselNaming.namingPriority != RootPriority || top.vesselNaming.vesselName != shipName ||
+                    top.vesselNaming.vesselType != payloadType)
+                    top.vesselNaming = new VesselNaming { vesselName = shipName, vesselType = payloadType, namingPriority = RootPriority };
+                lastPayloadName = shipName;
+                return;
+            }
             string last = lastPayloadName;
-            Part ours = payload.FirstOrDefault(p => p.vesselNaming != null && p.vesselNaming.namingPriority == PayloadPriority &&
-                                                    (last == null || p.vesselNaming.vesselName == last));
-            bool playerNamed = payload.Any(p => p.vesselNaming != null && p != ours);
+            Part ours = payload.FirstOrDefault(p => IsOurPayload(p) && (last == null || p.vesselNaming.vesselName == last));
+            bool playerNamed = payload.Any(p => p.vesselNaming != null && p != ours && p.vesselNaming.namingPriority > LauncherPriority);
             if (ours == null && !playerNamed)
             {
                 ours = payload.FirstOrDefault(p => p.parent == null || set.Contains(p.parent)) ?? payload[0];
-                ours.vesselNaming = new VesselNaming { namingPriority = PayloadPriority };
+                ours.vesselNaming = new VesselNaming();
             }
             if (ours != null)
             {
                 ours.vesselNaming.vesselName = shipName;
                 ours.vesselNaming.vesselType = payloadType;
+                ours.vesselNaming.namingPriority = PayloadPriority;
                 lastPayloadName = shipName;
             }
         }

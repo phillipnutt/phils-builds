@@ -167,8 +167,7 @@ namespace PhilsBuilds
         static VesselType PayloadType(Category cat)
         {
             if (cat != null) return LauncherTags.TypeOf(cat);
-            Part named = Stock.Ship?.parts?.FirstOrDefault(p => p.vesselNaming != null && p.vesselNaming.namingPriority == LauncherTags.PayloadPriority);
-            return named != null ? named.vesselNaming.vesselType : VesselType.Ship;
+            return LauncherTags.PayloadTypeIn(Stock.Ship) ?? VesselType.Ship;
         }
 
         // ---- Where the open design is filed --------------------------------------------------
@@ -543,13 +542,18 @@ namespace PhilsBuilds
                 ConfigNode root = ConfigNode.Load(path);
                 if (root == null) return;
                 bool changed = false;
-                foreach (ConfigNode part in root.GetNodes("PART"))
-                    foreach (ConfigNode n in part.GetNodes().ToArray())
-                        if (n.GetValue("priority") == LauncherTags.LauncherPriority.ToString() && n.GetValue("type") == "Debris" && n.HasValue("name"))
-                        {
-                            part.RemoveNode(n);
-                            changed = true;
-                        }
+                string label = LauncherTags.LauncherPriority.ToString(), old = LauncherTags.OldLauncherPriority.ToString(), top = LauncherTags.RootPriority.ToString();
+                ConfigNode[] parts = root.GetNodes("PART");
+                for (int i = 0; i < parts.Length; i++)
+                    foreach (ConfigNode n in parts[i].GetNodes().ToArray())
+                    {
+                        string pri = n.GetValue("priority");
+                        // Stage labels anywhere; the craft name a lone launcher's top part carried.
+                        bool ours = n.HasValue("name") && ((pri == label || pri == old) && n.GetValue("type") == "Debris" || i == 0 && pri == top);
+                        if (!ours) continue;
+                        parts[i].RemoveNode(n);
+                        changed = true;
+                    }
                 if (changed) root.Save(path);
             }
             catch (Exception e) { Debug.LogWarning($"[PhilsBuilds] Couldn't tidy {path}: {e.Message}"); }
