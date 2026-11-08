@@ -1126,13 +1126,27 @@ namespace PhilsBuilds
                 ("Height", c.Size.y > 0 ? Naming.Meters(c.Size.y) : "—"),
                 ("Stages", c.Stages > 0 ? c.Stages.ToString() : "—"),
             });
-            if (c.Description.Length > 0)
+            float bottom = H - TitleH - 14;
+
+            // How this mark differs from the one before it, like PIP's iterations.
+            CraftFile prev = c.Filed && f != null ? f.Marks.TakeWhile(m => m != c).LastOrDefault() : null;
+            if (prev != null)
             {
-                Text d = Kit.Text(detail, DX, y, DW, 60, c.Description, 13, Look.Ink2, align: TextAnchor.UpperLeft);
+                Library.LoadStats(prev);
+                string changes = Naming.MarkChanges(prev.Mass, c.Mass, prev.Cost, c.Cost, prev.Parts, c.Parts, prev.Stages, c.Stages);
+                if (changes.Length > 0)
+                {
+                    Kit.Line(detail, DX, y, DW, 14, $"SINCE {(prev.Mark > 0 ? "MARK " + Marks.Short(prev.Style, prev.Mark) : prev.Name.ToUpperInvariant())}", 10, Look.Ink3);
+                    Kit.Line(detail, DX, y + 14, DW, 18, changes, 13, Look.Ink2);
+                    y += 38;
+                }
+            }
+            if (c.Description.Length > 0 && bottom - 112 - y > 18)
+            {
+                Text d = Kit.Text(detail, DX, y, DW, Mathf.Min(60, bottom - 112 - y), c.Description, 13, Look.Ink2, align: TextAnchor.UpperLeft);
                 d.verticalOverflow = VerticalWrapMode.Truncate;
             }
 
-            float bottom = H - TitleH - 14;
             if (confirmLoad)
             {
                 Kit.Text(detail, DX, bottom - 122, DW, 36, "Your changes in the editor haven't been saved. They'll be lost.", 13, Look.Warn, align: TextAnchor.LowerLeft);

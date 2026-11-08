@@ -157,6 +157,9 @@ Phil let both sessions build overnight without his sign-off ("Build freely"), so
   with KSP's craft-thumbnail camera. It does this when one is saved from the drop box, and the first time an
   older one is picked up or loaded. The rest of the editor is hidden for that one render. The pictures sit
   in `<KSP>/thumbs` as `<save>_Subassemblies_<name>.png`, and follow renames and deletes.
+- **What changed since the last mark** (new, not asked for). A craft's panel shows a line under its stats,
+  like "SINCE MARK I: +2.3 t · +1,200 funds · +3 parts · +1 stage", so a family reads like PIP's
+  iterations. Figures that didn't change are left out, and the line is hidden if none did.
 
 ## Banked ideas (Phil's play-test thoughts, not decided)
 

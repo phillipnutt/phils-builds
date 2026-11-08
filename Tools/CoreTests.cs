@@ -80,6 +80,13 @@ static class CoreTests
         Is(Naming.SwapFamily("Orpheus II", "Orpheus I", "Orpheus"), "Orpheus II", "rename doesn't cut into a numeral");
         Is(Naming.SwapFamily("Haven Lab III", "Haven", "Harbor"), "Harbor Lab III", "rename with role");
 
+        // What changed between marks, shown in the craft panel.
+        Is(Naming.MarkChanges(10.0f, 12.3f, 20000, 21200, 40, 43, 3, 3), "+2.3 t · +1,200 funds · +3 parts", "mark changes, growth");
+        Is(Naming.MarkChanges(12.3f, 10.0f, 21200, 20000, 43, 42, 3, 2), "-2.3 t · -1,200 funds · -1 part · -1 stage", "mark changes, shrink");
+        Is(Naming.MarkChanges(10.0f, 10.02f, 20000, 20000.4f, 40, 40, 3, 3), "", "mark changes, too small to show");
+        Is(Naming.MarkChanges(0, 10f, 0, 20000, 0, 40, 0, 3), "", "mark changes, older mark unknown");
+        Is(Naming.MarkChanges(9.0f, 25.2f, 1000, 2000, 10, 11, 1, 2), "+16 t · +1,000 funds · +1 part · +1 stage", "mark changes, big mass in whole tons");
+
         Console.WriteLine($"{passed} passed, {failed} failed");
         return failed == 0 ? 0 : 1;
     }

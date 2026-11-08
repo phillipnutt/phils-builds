@@ -17,6 +17,7 @@
 - A launcher flown on its own launches under the craft's name.
 - Launchers and subassemblies have pictures in the library, taken when they're saved from the drop box,
   or the first time an older one is picked up or loaded.
+- A craft's panel shows what changed since the mark before it ("+2.3 t · +1,200 funds · +3 parts").
 
 ## 0.1.0 (2026-11-07)
 

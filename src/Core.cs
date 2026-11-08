@@ -205,6 +205,23 @@ namespace PhilsBuilds
 
         public static string Funds(float f) => f.ToString("#,0", CultureInfo.InvariantCulture);
 
+        // What changed from one mark to the next, like "+2.3 t · +1,200 funds · +3 parts".
+        // Figures that didn't change are left out; "" if none did (or nothing is known).
+        public static string MarkChanges(float mass0, float mass1, float cost0, float cost1, int parts0, int parts1, int stages0, int stages1)
+        {
+            var bits = new List<string>();
+            string Sign(float d) => d > 0 ? "+" : "-";
+            float dm = mass1 - mass0;
+            if (mass0 > 0 && mass1 > 0 && Math.Abs(dm) >= 0.05f) bits.Add(Sign(dm) + Tons(Math.Abs(dm)));
+            float dc = cost1 - cost0;
+            if (cost0 > 0 && cost1 > 0 && Math.Abs(dc) >= 1f) bits.Add(Sign(dc) + Funds(Math.Abs(dc)) + " funds");
+            int dp = parts1 - parts0;
+            if (parts0 > 0 && parts1 > 0 && dp != 0) bits.Add($"{Sign(dp)}{Math.Abs(dp)} part{(Math.Abs(dp) == 1 ? "" : "s")}");
+            int ds = stages1 - stages0;
+            if (stages0 > 0 && stages1 > 0 && ds != 0) bits.Add($"{Sign(ds)}{Math.Abs(ds)} stage{(Math.Abs(ds) == 1 ? "" : "s")}");
+            return string.Join(" · ", bits);
+        }
+
         // File-safe: KSP saves "Haven Lab I" as "Haven Lab I.craft"; these
         // characters can't be in a Windows file name.
         public static string Clean(string s)
