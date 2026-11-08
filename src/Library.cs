@@ -65,6 +65,7 @@ namespace PhilsBuilds
         public readonly List<string> Contents = new List<string>();     // part titles, most common first
         public string Id, Line;             // stable ids (filed subassemblies only), from the save's own file
         public bool Rated => Kind == SubKind.Launcher && Rating > 0;
+        public bool IsStage => SubKinds.IsStage(Kind);
         public float Diameter => Mathf.Max(Size.x, Size.z);
     }
 
@@ -101,6 +102,10 @@ namespace PhilsBuilds
 
         public static string SaveDir => System.IO.Path.Combine(KSPUtil.ApplicationRootPath, "saves", HighLogic.SaveFolder ?? "");
         public static string ShipsDir(string facility) => System.IO.Path.Combine(SaveDir, "Ships", facility);
+
+        // Where a folder sits in the editor's building's Ships folder ("Capsules/Argo", "" for
+        // the Ships folder itself), or null when it's somewhere else.
+        public static string InShips(string folder) => Paths.Under(ShipsDir(Stock.Facility), folder);
         public static string SubsDir => System.IO.Path.Combine(SaveDir, "Subassemblies");
         static string StorePath => System.IO.Path.Combine(SaveDir, "PhilsBuilds.cfg");
         public static string DeletedDir => System.IO.Path.Combine(SaveDir, "Deleted craft");
@@ -135,6 +140,7 @@ namespace PhilsBuilds
                 }
             AssignIds();
             scannedSave = HighLogic.SaveFolder;
+            launcherNames = null;
             Version++;
             BuildsApi.RaiseLibraryChanged();
         }
@@ -161,8 +167,7 @@ namespace PhilsBuilds
                 Name = System.IO.Path.GetFileNameWithoutExtension(file),
                 Written = File.GetLastWriteTime(file),
             };
-            string dir = System.IO.Path.GetDirectoryName(Full(file));
-            c.RelDir = dir.Length > Full(root).Length ? dir.Substring(Full(root).Length).Trim('\\', '/').Replace('\\', '/') : "";
+            c.RelDir = Paths.Under(root, System.IO.Path.GetDirectoryName(Full(file))) ?? "";
             string[] parts = c.RelDir.Length == 0 ? new string[0] : c.RelDir.Split('/');
 
             Category cat = parts.Length >= 1 ? Category.ByFolder(parts[0]) : null;
@@ -348,12 +353,31 @@ namespace PhilsBuilds
 
         // A launcher or upper stage of this name.
         public static SubFile StageNamed(string name) =>
-            string.IsNullOrEmpty(name) ? null : Subs.FirstOrDefault(s => (s.Kind == SubKind.Launcher || s.Kind == SubKind.UpperStage) && Naming.SameName(s.Name, name));
+            string.IsNullOrEmpty(name) ? null : Subs.FirstOrDefault(s => s.IsStage && Naming.SameName(s.Name, name));
 
-        public static bool HasLauncher(string name) => Subs.Any(s => s.Kind == SubKind.Launcher && Naming.SameName(s.Name, name));
+        // The launchers' names, kept for the stage-name checks (they run for every part on
+        // every change in the editor). Forgotten whenever the library changes.
+        static HashSet<string> launcherNames;
+
+        // A launcher of this name is in the library now.
+        public static bool HasLauncher(string name)
+        {
+            if (string.IsNullOrEmpty(name)) return false;
+            if (launcherNames == null)
+                launcherNames = new HashSet<string>(Subs.Where(s => s.Kind == SubKind.Launcher).Select(s => s.Name.Trim()), StringComparer.OrdinalIgnoreCase);
+            return launcherNames.Contains(name.Trim());
+        }
 
         // A launcher of this name was in the library and has been renamed or deleted.
         public static bool WasLauncher(string name) => !string.IsNullOrEmpty(name) && formerLaunchers.ContainsKey(name.Trim());
+
+        // The one answer to "is this one of this save's launchers?": in the library now, or
+        // before it was renamed or deleted.
+        public static bool IsLauncherName(string name)
+        {
+            EnsureScanned();
+            return HasLauncher(name) || WasLauncher(name);
+        }
 
         // What a launcher is called now: a renamed one's latest name; any other name as it is
         // (a launcher in the library, a deleted one, or a name this mod never wrote).
@@ -500,8 +524,10 @@ namespace PhilsBuilds
             }
         }
 
+        // Every change to the library (a delete, a rename, a new kind or rating) ends here.
         public static void SaveStore()
         {
+            launcherNames = null;
             try
             {
                 var root = new ConfigNode();
@@ -513,7 +539,7 @@ namespace PhilsBuilds
                     c.AddValue("kind", s.Kind.ToString());
                     if (s.Family.Length > 0) c.AddValue("family", s.Family);
                     if (s.Group.Length > 0) c.AddValue("group", s.Group);
-                    if (s.Kind == SubKind.Launcher || s.Kind == SubKind.UpperStage)
+                    if (s.IsStage)
                     {
                         c.AddValue("style", s.Style.ToString());
                         c.AddValue("mark", s.Mark);

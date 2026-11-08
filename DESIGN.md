@@ -210,6 +210,34 @@ Found by Phil with Argo I, Haytor 002 and Rockall 002; written up by the suite's
     new name, and a re-rated launcher's rename carries the editor's craft name with it. So Save keeps
     recognising it.
 
+## One rule per question (simplification pass, 2026-11-08)
+
+Phil asked every mod to replace overlapping rules, often added as fixes, with one rule each ("more
+complexity and overlapping stuff ... has more ways in which it can fail"). Each question now has one
+home:
+- **Is this naming a stage name this mod wrote?** `StageNames.IsLabel` (Core.cs, checked offline). It's
+  used for parts in the editor (`LauncherTags.IsLabel`) and for saved files (`LauncherTags.StripFile`).
+  Before, the file clean-up had its own copy of the rule, which had drifted slightly from the editor's.
+- **Is this one of the save's launchers?** `Library.IsLauncherName`: in the library now, or before a
+  rename or delete. Before, LauncherTags kept its own list, separate from the library's.
+- **Is the craft's name only a stand-in?** `Stock.IsPlaceholderName`: KSP's default, or a launcher's or
+  upper stage's. It's used when a stage joins the editor (`StageArrived`, which also tags a launcher) and
+  by the Save panel. Before, there were three slightly different rules.
+- **Which Save dialog?** `BuildsEditor.SaveDialog`, for both the editor's Save button and the library's
+  Save….
+- **Same file or folder, and where a folder sits under Ships?** `Paths.Same` / `Paths.Under` (Core.cs,
+  checked offline), through `Library.InShips`. This replaces four hand-written comparisons.
+- **Launcher or upper stage?** `SubFile.IsStage` / `SubKinds.IsStage`, in place of about 15 spelled-out
+  checks. **Any craft in the editor?** `Stock.HasCraft`. **Does a launcher fit?** `TooHeavy` and
+  `TooWide`, used by the list and its warning line.
+
+Behaviour is unchanged except in three corners where the old rules disagreed with each other:
+- A craft named after a launcher (not KSP's default) now takes the name of a stage picked into an empty
+  editor.
+- The Save panel deals a new name over a deleted or renamed launcher's name, as it already did over a
+  current one's.
+- The library's Save… gives the same "isn't a mark of this family" note as the editor's Save button.
+
 ## Banked ideas (Phil's play-test thoughts, not decided)
 
 - **Merge holds a craft by its root part** (2026-11-06). A saved capsule with a heat shield below and a

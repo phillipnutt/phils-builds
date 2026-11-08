@@ -150,8 +150,7 @@ namespace PhilsBuilds
             try
             {
                 string dir = Path.GetDirectoryName(Path.GetFullPath(path));
-                if (Directory.Exists(dir) && dir.StartsWith(Path.GetFullPath(Library.ShipsDir(Stock.Facility)), StringComparison.OrdinalIgnoreCase))
-                    Stock.SetSaveFolder(dir);
+                if (Directory.Exists(dir) && Library.InShips(dir) != null) Stock.SetSaveFolder(dir);
             }
             catch { }
         }
@@ -180,20 +179,12 @@ namespace PhilsBuilds
         {
             cat = null;
             family = null;
-            string folder = Stock.SaveFolder;
-            if (string.IsNullOrEmpty(folder)) return false;
-            try
-            {
-                string root = Path.GetFullPath(Library.ShipsDir(Stock.Facility)).TrimEnd('\\', '/');
-                string full = Path.GetFullPath(folder).TrimEnd('\\', '/');
-                if (!full.StartsWith(root, StringComparison.OrdinalIgnoreCase) || full.Length <= root.Length) return false;
-                string[] parts = full.Substring(root.Length).Trim('\\', '/').Split('\\', '/');
-                if (parts.Length != 2) return false;
-                cat = Category.ByFolder(parts[0]);
-                family = parts[1];
-                return cat != null && !cat.Subassembly;
-            }
-            catch { return false; }
+            string rel = Library.InShips(Stock.SaveFolder);
+            string[] parts = string.IsNullOrEmpty(rel) ? new string[0] : rel.Split('/');
+            if (parts.Length != 2) return false;
+            cat = Category.ByFolder(parts[0]);
+            family = parts[1];
+            return cat != null && !cat.Subassembly;
         }
 
         static Category CurrentCategory() => CurrentFiling(out Category c, out _) ? c : null;
@@ -248,17 +239,26 @@ namespace PhilsBuilds
         void OnSaveButton()
         {
             if (dialog != null) return;
-            if (Stock.Ship == null || Stock.Ship.parts.Count == 0) { QuickSave(); return; }
+            if (!Stock.HasCraft) { QuickSave(); return; }
+            Show(SaveDialog());
+        }
+
+        // The library's Save… button.
+        public void OpenSave() => Show(SaveDialog());
+
+        // The one choice of Save dialog, for both Save buttons.
+        Dialog SaveDialog()
+        {
             Library.Scan();
             SubFile stage = OpenStage();
-            if (stage != null) Show(new StageMarkDialog(this, stage));
-            else if (!CurrentFiling(out _, out string family)) Show(new SavePanel(this, null));
+            if (stage != null) return new StageMarkDialog(this, stage);
+            if (!Stock.HasCraft || !CurrentFiling(out _, out string family)) return new SavePanel(this, null);
             // A name typed in the box that isn't a mark of this family ("Orpheus" in the
             // Orpheus I family) would save a stray file into the folder, so ask instead.
-            else if (!FitsFamily(Stock.ShipName, family))
-                Show(new SavePanel(this, null, $"\"{Stock.ShipName}\" isn't a mark of the {family} family, so where should it go?"));
+            if (!FitsFamily(Stock.ShipName, family))
+                return new SavePanel(this, null, $"\"{Stock.ShipName}\" isn't a mark of the {family} family, so where should it go?");
             // Phil: Save always asks, over the open mark or as the next one.
-            else Show(new NextMarkDialog(this, family));
+            return new NextMarkDialog(this, family);
         }
 
         // A name fits the open family when it's a mark of the family, or a mark of a
@@ -269,18 +269,7 @@ namespace PhilsBuilds
             if (!Marks.TryParse(name, out string rest, out _, out _)) return false;
             if (Naming.InFamily(rest, family)) return true;
             string folder = Stock.SaveFolder;
-            return Library.Craft.Any(c => Naming.SameName(c.Base, rest) && c.Filed && SamePath(Path.GetDirectoryName(c.Path), folder));
-        }
-
-        // The library's Save… button: the next mark for a filed design, or filing a new one.
-        public void OpenSave()
-        {
-            Library.Scan();
-            SubFile stage = OpenStage();
-            if (stage != null) Show(new StageMarkDialog(this, stage));
-            else if (CurrentFiling(out _, out string family) && Stock.Ship != null && Stock.Ship.parts.Count > 0 && FitsFamily(Stock.ShipName, family))
-                Show(new NextMarkDialog(this, family));
-            else Show(new SavePanel(this, null));
+            return Library.Craft.Any(c => Naming.SameName(c.Base, rest) && c.Filed && Paths.Same(Path.GetDirectoryName(c.Path), folder));
         }
 
         public void OpenNewDesign() => Show(new SavePanel(this, null));
@@ -293,7 +282,7 @@ namespace PhilsBuilds
         // its Save dialog has a link to save a new craft instead.)
         public SubFile OpenStage()
         {
-            if (Stock.Ship?.parts == null || Stock.Ship.parts.Count == 0 || EditorLogic.RootPart == null) return null;
+            if (!Stock.HasCraft || EditorLogic.RootPart == null) return null;
             SubFile s = Library.StageNamed(Stock.ShipName);
             if (s == null) return null;
             if (s.Kind == SubKind.Launcher && LauncherTags.PayloadOf(Stock.Ship).Count > 0) return null;
@@ -352,7 +341,7 @@ namespace PhilsBuilds
             Stock.Save(() =>
             {
                 AfterSave(existed);
-                if (moveOld && File.Exists(Stock.CurrentFile ?? "") && !string.Equals(Path.GetFullPath(oldFile), Path.GetFullPath(Stock.CurrentFile), StringComparison.OrdinalIgnoreCase))
+                if (moveOld && File.Exists(Stock.CurrentFile ?? "") && !Paths.Same(oldFile, Stock.CurrentFile))
                 {
                     try { Library.DeleteCraft(old); } catch (Exception e) { Debug.LogWarning($"[PhilsBuilds] Couldn't move the old copy: {e.Message}"); }
                 }
@@ -369,9 +358,7 @@ namespace PhilsBuilds
             {
                 string file = Stock.CurrentFile;
                 if (file == null) return;
-                string root = Path.GetFullPath(Library.ShipsDir(Stock.Facility)).TrimEnd('\\', '/');
-                string dir = Path.GetDirectoryName(Path.GetFullPath(file));
-                string rel = dir.Length > root.Length ? dir.Substring(root.Length).Trim('\\', '/').Replace('\\', '/') : "";
+                string rel = Library.InShips(Path.GetDirectoryName(Path.GetFullPath(file))) ?? "";
                 string key = Library.NoteKey(Stock.Facility, rel, Path.GetFileNameWithoutExtension(file));
                 string launcher = LauncherTags.LauncherIn(Stock.Ship);
                 Library.Scan();
@@ -387,22 +374,15 @@ namespace PhilsBuilds
 
         public void FileCraft(CraftFile c, string folder, string name, Category cat)
         {
-            bool isCurrent = SamePath(c.Path, Stock.CurrentFile);
+            bool isCurrent = Paths.Same(c.Path, Stock.CurrentFile);
             string dest = Library.MoveCraft(c, folder, name);
             if (isCurrent)
             {
                 Stock.SetSaveFolder(folder);
                 Stock.ShipName = name;
             }
-            Refresh(Library.CraftAt(dest) ?? Library.Craft.FirstOrDefault(x => SamePath(x.Path, dest)));
+            Refresh(Library.CraftAt(dest) ?? Library.Craft.FirstOrDefault(x => Paths.Same(x.Path, dest)));
             Say($"Filed {name} in {cat.Label}");
-        }
-
-        static bool SamePath(string a, string b)
-        {
-            if (string.IsNullOrEmpty(a) || string.IsNullOrEmpty(b)) return false;
-            try { return string.Equals(Path.GetFullPath(a), Path.GetFullPath(b), StringComparison.OrdinalIgnoreCase); }
-            catch { return false; }
         }
 
         public void OpenRename(Family f) { if (f != null) Show(new RenameDialog(this, f)); }
@@ -416,7 +396,7 @@ namespace PhilsBuilds
             foreach (CraftFile c in f.Marks.ToList())
             {
                 string n = Naming.SwapFamily(c.Name, f.Name, newName);
-                bool isCurrent = SamePath(c.Path, current);
+                bool isCurrent = Paths.Same(c.Path, current);
                 string dest = Library.MoveCraft(c, folder, n);
                 if (isCurrent)
                 {
@@ -466,18 +446,15 @@ namespace PhilsBuilds
             if (HandsFull()) return;
             window.Close();
             Design d = BuildsApi.OfFile(s.Path);
-            string launcher = s.Kind == SubKind.Launcher ? s.Name : null;
-            string name = IsStage(s) && Stock.Empty ? s.Name : null;
+            bool intoEmpty = Stock.Empty;
             if (!Stock.PickUp(s.Path, sc =>
                 {
-                    // A subassembly saved before the library took pictures gets one now.
-                    if (!Thumbs.Has(s.Name)) Thumbs.Take(sc, s.Name);
-                    Spawned(sc, d, PlaceHow.PickUp, launcher, null, name);
+                    Thumbs.TakeIfMissing(sc, s.Name);       // one saved before the library took pictures
+                    Spawned(sc, d, PlaceHow.PickUp, null, s.IsStage ? s.Name : null, s.Kind == SubKind.Launcher, intoEmpty);
                 }))
                 Say($"Couldn't pick up {s.Name}");
         }
 
-        static bool IsStage(SubFile s) => s != null && (s.Kind == SubKind.Launcher || s.Kind == SubKind.UpperStage);
 
         // A launcher or upper stage opened as the whole craft, on an empty editor (Phil:
         // a launcher on its own should load, not only pick up). It's named after itself,
@@ -485,7 +462,7 @@ namespace PhilsBuilds
         public void LoadSub(SubFile s)
         {
             if (s == null) return;
-            if (!IsStage(s) || !Stock.Empty) { PickUp(s); return; }
+            if (!s.IsStage || !Stock.Empty) { PickUp(s); return; }
             if (HandsFull()) return;
             window.Close();
             placing = BuildsApi.OfFile(s.Path);
@@ -499,7 +476,7 @@ namespace PhilsBuilds
         {
             try
             {
-                if (!Thumbs.Has(s.Name)) Thumbs.Take(ship, s.Name);
+                Thumbs.TakeIfMissing(ship, s.Name);
                 float lift = Stock.LiftOffFloor(ship);
                 if (lift > 0) Debug.Log($"[PhilsBuilds] Lifted {s.Name} {lift:0.00} m onto the floor (floor at {Stock.Floor:0.00} m)");
                 if (s.Kind == SubKind.Launcher) LauncherTags.Tag(ship.parts[0].localRoot, s.Name);
@@ -518,7 +495,7 @@ namespace PhilsBuilds
             if (d == null || row == null || row.Reserved) return;
             if (row.IsNew)
             {
-                SubFile s = Library.Subs.FirstOrDefault(x => SamePath(x.Path, d.Path));
+                SubFile s = Library.Subs.FirstOrDefault(x => Paths.Same(x.Path, d.Path));
                 CraftFile c = s == null ? Library.CraftAt(d.Path) : null;
                 if (s != null) PickUp(s);
                 else if (c != null) LoadCraft(c, merge: true);
@@ -527,13 +504,13 @@ namespace PhilsBuilds
             ICopies copies = BuildsApi.Copies;
             if (copies == null || HandsFull()) return;
             window.Close();
-            string name = (d.Kind == DesignKind.Launcher || d.Kind == DesignKind.UpperStage) && Stock.Empty ? d.Name : null;
+            bool stage = d.Kind == DesignKind.Launcher || d.Kind == DesignKind.UpperStage, intoEmpty = Stock.Empty;
             try
             {
                 copies.Build(d, row, sc =>
                 {
                     if (this == null || sc == null || !Stock.Hold(sc)) return;
-                    Spawned(sc, d, PlaceHow.Copy, d.Kind == DesignKind.Launcher ? d.Name : null, row.Id, name);
+                    Spawned(sc, d, PlaceHow.Copy, row.Id, stage ? d.Name : null, d.Kind == DesignKind.Launcher, intoEmpty);
                 });
             }
             catch (Exception e)
@@ -543,20 +520,30 @@ namespace PhilsBuilds
             }
         }
 
-        // Parts are on the cursor (or are the craft, on an empty editor): name a
-        // launcher's spent stages, and say where the parts came from. A stage picked into
-        // an empty editor gives the craft its name, if it hasn't one yet.
-        void Spawned(ShipConstruct sc, Design d, PlaceHow how, string launcher, string copyId, string shipName = null)
+        // Parts are on the cursor (or are the craft, on an empty editor): a launcher or upper
+        // stage (`stage`, its name) gets its names, and anyone listening hears where the
+        // parts came from.
+        void Spawned(ShipConstruct sc, Design d, PlaceHow how, string copyId, string stage, bool launcher, bool intoEmpty)
         {
-            if (shipName != null && Stock.IsDefaultName(Stock.ShipName)) Stock.ShipName = shipName;
-            if (launcher != null)
+            if (stage != null)
             {
                 Part root = Stock.Held ?? sc.parts[0].localRoot;
-                LauncherTags.Tag(root, launcher);
-                LauncherTags.EnsurePayload(Stock.Ship, new System.Collections.Generic.HashSet<Part>(LauncherTags.Subtree(root)), Stock.ShipName,
-                    PayloadType(CurrentCategory()), ref lastPayloadName);
+                StageArrived(root, stage, launcher, intoEmpty);
+                if (launcher)
+                    LauncherTags.EnsurePayload(Stock.Ship, new System.Collections.Generic.HashSet<Part>(LauncherTags.Subtree(root)), Stock.ShipName,
+                        PayloadType(CurrentCategory()), ref lastPayloadName);
             }
             if (d != null) BuildsApi.RaisePlaced(d, how, sc.parts, copyId);
+        }
+
+        // The one rule for a launcher or upper stage joining the editor's craft (picked up,
+        // built from the hangar, or just saved from it): a launcher's parts get its stage
+        // names, and if it's the whole craft and the craft has only a stand-in name (KSP's
+        // default, or a stage's), the craft takes its name, so Save knows it.
+        void StageArrived(Part root, string name, bool launcher, bool whole)
+        {
+            if (whole && Stock.IsPlaceholderName(Stock.ShipName)) Stock.ShipName = name;
+            if (launcher) LauncherTags.Tag(root, name);
         }
 
         public void OpenSubDialog(SubFile existing, Part held, SubKind kind, bool wholeCraft = false) =>
@@ -567,7 +554,7 @@ namespace PhilsBuilds
             SubFile s = editing;
             System.Collections.Generic.List<Part> saved = null;
             bool existed = FileExists(Path.Combine(Library.SubsDir, name + ".craft"));
-            bool stage = info.Kind == SubKind.Launcher || info.Kind == SubKind.UpperStage;
+            bool stage = info.IsStage;
             if (held != null)
             {
                 saved = Stock.SaveSubassembly(name, "", held);
@@ -575,7 +562,7 @@ namespace PhilsBuilds
                 Library.Scan();
                 s = Library.SubNamed(name);
                 if (s == null) throw new IOException("It saved, but under a different name.");
-                StripLauncherNames(s.Path, stage);
+                LauncherTags.StripFile(s.Path, stage);
             }
             else if (s != null && !Naming.SameName(s.Name, name) || s != null && s.Name != name)
             {
@@ -602,22 +589,17 @@ namespace PhilsBuilds
             BuildsApi.RaiseSaved(BuildsApi.OfFile(path), !existed, saved);
             // Listeners may have written to the parts just saved (the Reusability Suite
             // stamps its design id on them), so the file is written again to match.
-            if (BuildsApi.HasSavedListeners && Stock.SaveSubassembly(name, "", held, picture: false) != null) StripLauncherNames(path, stage);
+            if (BuildsApi.HasSavedListeners && Stock.SaveSubassembly(name, "", held, picture: false) != null) LauncherTags.StripFile(path, stage);
         }
 
         // The parts just saved as a launcher or upper stage are that stage now, though they
-        // may have come from another one (deleted, or still in the library): a launcher's get
-        // its stage names, and a craft that's only this stage, still named after a stage (or
-        // not named), takes its name, so Save knows it next time.
+        // may have come from another one (deleted, or still in the library).
         void BecomeStage(Part held, string name, SubKind kind)
         {
             try
             {
                 var tree = new System.Collections.Generic.HashSet<Part>(LauncherTags.Subtree(held));
-                bool whole = Stock.HoldingCraft || (Stock.Ship?.parts?.All(tree.Contains) ?? true);
-                if (kind == SubKind.Launcher) LauncherTags.Tag(held, name);
-                string now = Stock.ShipName;
-                if (whole && (Stock.IsDefaultName(now) || LauncherTags.Known(now) || Library.StageNamed(now) != null)) Stock.ShipName = name;
+                StageArrived(held, name, kind == SubKind.Launcher, Stock.HoldingCraft || (Stock.Ship?.parts?.All(tree.Contains) ?? true));
                 Relabel();
             }
             catch (Exception e) { Debug.LogWarning($"[PhilsBuilds] Naming {name}'s stages: {e.Message}"); }
@@ -628,36 +610,6 @@ namespace PhilsBuilds
         static void FollowRename(string was, string now)
         {
             if (Naming.SameName(Stock.ShipName, was)) Stock.ShipName = now;
-        }
-
-        // A subassembly saved from a craft that was built on a library launcher carries
-        // its stage names; they come off, and a launcher gets fresh ones when it's next
-        // picked up. Only the parts' VESSELNAMING nodes are looked at, and only names this
-        // mod writes: stage names of launchers in the library (or that were), and (saving a
-        // launcher or upper stage) any stage-shaped name at a stage's priority, whichever
-        // launcher it came from, and the craft name a lone launcher's top part carried.
-        static void StripLauncherNames(string path, bool stage)
-        {
-            try
-            {
-                ConfigNode root = ConfigNode.Load(path);
-                if (root == null) return;
-                bool changed = false;
-                string label = LauncherTags.LauncherPriority.ToString(), old = LauncherTags.OldLauncherPriority.ToString(), top = LauncherTags.RootPriority.ToString();
-                ConfigNode[] parts = root.GetNodes("PART");
-                for (int i = 0; i < parts.Length; i++)
-                    foreach (ConfigNode n in parts[i].GetNodes("VESSELNAMING"))
-                    {
-                        string pri = n.GetValue("priority"), name = n.GetValue("name");
-                        bool ours = (pri == label || pri == old) && (LauncherTags.IsLabelName(name) || stage && LauncherTags.LooksLikeLabel(name)) ||
-                                    stage && i == 0 && pri == top && n.GetValue("type") != "Debris";
-                        if (!ours) continue;
-                        parts[i].RemoveNode(n);
-                        changed = true;
-                    }
-                if (changed) root.Save(path);
-            }
-            catch (Exception e) { Debug.LogWarning($"[PhilsBuilds] Couldn't tidy {path}: {e.Message}"); }
         }
 
         public void SetRating(SubFile s, float tons, float width, string notes)

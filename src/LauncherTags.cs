@@ -16,68 +16,58 @@
 // 2026-11-07 by reading Part.decouple). Craft tagged then are upgraded the next
 // time they're edited.
 //
-// Only names of launchers in this save's library count as stage names, so a craft
-// whose parts the player named by hand is left alone. A launcher that was renamed or
-// deleted still counts (Library remembers it): a craft built on it keeps working
-// stage names, following a renamed launcher's new name.
+// What counts as a stage name is one rule, StageNames.IsLabel (src/Core.cs, checked
+// offline), used for parts in the editor and for saved files alike. Only names of
+// this save's launchers count (Library.IsLauncherName), so a craft whose parts the
+// player named by hand is left alone; a launcher that was renamed or deleted still
+// counts, so a craft built on it keeps working stage names.
 
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Text.RegularExpressions;
 using UnityEngine;
+using static PhilsBuilds.StageNames;
 
 namespace PhilsBuilds
 {
     static class LauncherTags
     {
-        public const int LauncherPriority = 1, RootPriority = 2, PayloadPriority = 3;
-        public const int OldLauncherPriority = -1, OldPayloadPriority = 1;      // Phil's Builds 0.1.0
-
-        static readonly Regex Label = new Regex(@"^(.*?) (Stage \d+|Booster)$");
-
         // ---- Telling the parts apart -------------------------------------------------------
-
-        static HashSet<string> known;
-        static int knownVersion = -1;
-
-        // A launcher of that name is in this save's library, or was before it was renamed
-        // or deleted.
-        public static bool Known(string launcher)
-        {
-            if (string.IsNullOrEmpty(launcher)) return false;
-            Library.EnsureScanned();
-            if (known == null || knownVersion != Library.Version)
-            {
-                known = new HashSet<string>(Library.Subs.Where(s => s.Kind == SubKind.Launcher).Select(s => s.Name), StringComparer.OrdinalIgnoreCase);
-                knownVersion = Library.Version;
-            }
-            return known.Contains(launcher.Trim()) || Library.WasLauncher(launcher);
-        }
-
-        // Shaped like a stage name ("<launcher> Stage 2", "<launcher> Booster"), whoever wrote it.
-        public static bool LooksLikeLabel(string name) => !string.IsNullOrEmpty(name) && Label.IsMatch(name);
-
-        // "Cypress 010 Stage 1" -> "Cypress 010"; a bare launcher name stays as it is.
-        public static string LauncherPart(string name)
-        {
-            if (string.IsNullOrEmpty(name)) return null;
-            Match m = Label.Match(name);
-            return m.Success ? m.Groups[1].Value : name;
-        }
-
-        // A stage name this mod would write, for a launcher in the library.
-        public static bool IsLabelName(string name) => !string.IsNullOrEmpty(name) && Known(LauncherPart(name));
 
         // A launcher part, named for the piece it drops away with. Debris, or (a piece with
         // its own probe core or pod) a flyable type with a stage label for a name.
         public static bool IsLabel(Part p)
         {
             VesselNaming n = p?.vesselNaming;
-            if (n == null || string.IsNullOrEmpty(n.vesselName)) return false;
-            if (n.namingPriority != LauncherPriority && n.namingPriority != OldLauncherPriority) return false;
-            if (n.vesselType != VesselType.Debris && !Label.IsMatch(n.vesselName)) return false;
-            return Known(LauncherPart(n.vesselName));
+            return n != null && StageNames.IsLabel(n.vesselName, n.vesselType == VesselType.Debris, n.namingPriority, Library.IsLauncherName);
+        }
+
+        // A launcher or subassembly file just saved: the names this mod wrote come off its
+        // parts' VESSELNAMING nodes (nothing else in the file is touched). A launcher gets
+        // fresh ones whenever it's placed. Saving a launcher or upper stage (`stage`) also
+        // takes any stage-shaped name, and the craft name a lone launcher's top part carried.
+        public static void StripFile(string path, bool stage)
+        {
+            try
+            {
+                ConfigNode root = ConfigNode.Load(path);
+                if (root == null) return;
+                bool changed = false;
+                ConfigNode[] parts = root.GetNodes("PART");
+                for (int i = 0; i < parts.Length; i++)
+                    foreach (ConfigNode n in parts[i].GetNodes("VESSELNAMING"))
+                    {
+                        int.TryParse(n.GetValue("priority"), out int pri);
+                        bool debris = n.GetValue("type") == "Debris";
+                        bool ours = StageNames.IsLabel(n.GetValue("name"), debris, pri, Library.IsLauncherName, anyLauncher: stage) ||
+                                    stage && i == 0 && pri == RootPriority && !debris;
+                        if (!ours) continue;
+                        parts[i].RemoveNode(n);
+                        changed = true;
+                    }
+                if (changed) root.Save(path);
+            }
+            catch (Exception e) { Debug.LogWarning($"[PhilsBuilds] Couldn't tidy {path}: {e.Message}"); }
         }
 
         // A lone launcher's top part, carrying the ship's name: it sits on launcher parts
@@ -178,7 +168,7 @@ namespace PhilsBuilds
         public static void Tag(Part launcherRoot, string launcherName)
         {
             foreach (Part p in Subtree(launcherRoot))
-                p.vesselNaming = new VesselNaming { vesselName = launcherName, vesselType = VesselType.Debris, namingPriority = LauncherPriority };
+                p.vesselNaming = new VesselNaming { vesselName = launcherName, vesselType = VesselType.Debris, namingPriority = LabelPriority };
         }
 
         public static IEnumerable<Part> Subtree(Part p)
@@ -251,8 +241,8 @@ namespace PhilsBuilds
                 string label = labels[headOf[p]];
                 VesselType type = types[headOf[p]];
                 VesselNaming n = p.vesselNaming;
-                if (n.vesselName != label || n.vesselType != type || n.namingPriority != LauncherPriority)
-                    p.vesselNaming = new VesselNaming { vesselName = label, vesselType = type, namingPriority = LauncherPriority };
+                if (n.vesselName != label || n.vesselType != type || n.namingPriority != LabelPriority)
+                    p.vesselNaming = new VesselNaming { vesselName = label, vesselType = type, namingPriority = LabelPriority };
             }
 
             EnsurePayload(ship, set, shipName, payloadType, ref lastPayloadName, carrier);
@@ -293,7 +283,7 @@ namespace PhilsBuilds
                 return;
             }
             Part ours = payload.FirstOrDefault(p => IsOurPayload(p) && (last == null || p.vesselNaming.vesselName == last));
-            bool playerNamed = payload.Any(p => p.vesselNaming != null && p != ours && p.vesselNaming.namingPriority > LauncherPriority);
+            bool playerNamed = payload.Any(p => p.vesselNaming != null && p != ours && p.vesselNaming.namingPriority > LabelPriority);
             if (ours == null && !playerNamed)
             {
                 ours = anchor ?? payload[0];

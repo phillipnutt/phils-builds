@@ -87,6 +87,33 @@ static class CoreTests
         Is(Naming.MarkChanges(0, 10f, 0, 20000, 0, 40, 0, 3), "", "mark changes, older mark unknown");
         Is(Naming.MarkChanges(9.0f, 25.2f, 1000, 2000, 10, 11, 1, 2), "+16 t · +1,000 funds · +1 part · +1 stage", "mark changes, big mass in whole tons");
 
+        // Stage names: one rule for parts in the editor and in saved files.
+        Func<string, bool> ours = l => l == "Oak 030" || l == "Haytor 002";
+        Is(StageNames.LauncherPart("Oak 030 Stage 2"), "Oak 030", "launcher of a stage name");
+        Is(StageNames.LauncherPart("Oak 030 Booster"), "Oak 030", "launcher of a booster name");
+        Is(StageNames.LauncherPart("Oak 030"), "Oak 030", "bare launcher name");
+        Is(StageNames.IsLabel("Oak 030 Stage 1", true, 1, ours), true, "our stage label");
+        Is(StageNames.IsLabel("Oak 030 Stage 4", false, 1, ours), true, "our flyable stage label");
+        Is(StageNames.IsLabel("Oak 030", true, 1, ours), true, "a just-tagged part (bare name, debris)");
+        Is(StageNames.IsLabel("Oak 030 Stage 1", true, -1, ours), true, "0.1.0's label priority");
+        Is(StageNames.IsLabel("Oak 030 Stage 1", true, 2, ours), false, "wrong priority");
+        Is(StageNames.IsLabel("Oak 030", false, 1, ours), false, "a ship named like a launcher isn't a label");
+        Is(StageNames.IsLabel("Kerbal X Booster", true, 1, ours), false, "a hand-typed booster name is left alone");
+        Is(StageNames.IsLabel("Kerbal X Booster", true, 1, ours, anyLauncher: true), true, "saving a stage takes any stage-shaped name");
+        Is(StageNames.IsLabel("Kerbal X", true, 1, ours, anyLauncher: true), false, "but not any debris name");
+        Is(StageNames.IsLabel("", true, 1, ours), false, "no name");
+
+        // Paths.
+        Is(Paths.Same(@"C:\KSP\saves\a\Ships\VAB", @"c:\ksp\saves\a\ships\vab\"), true, "same folder, any case and trailing slash");
+        Is(Paths.Same(@"C:\KSP\x.craft", @"C:\KSP\y.craft"), false, "different files");
+        Is(Paths.Same(null, @"C:\KSP"), false, "no path");
+        Is(Paths.Under(@"C:\KSP\Ships\VAB", @"C:\KSP\Ships\VAB\Capsules\Argo"), "Capsules/Argo", "folder under the root");
+        Is(Paths.Under(@"C:\KSP\Ships\VAB", @"C:\KSP\Ships\VAB\"), "", "the root itself");
+        Is(Paths.Under(@"C:\KSP\Ships\VAB", @"C:\KSP\Ships\VABX\Capsules"), null, "a folder that only starts the same");
+        Is(Paths.Under(@"C:\KSP\Ships\VAB", @"C:\KSP\Ships\SPH"), null, "somewhere else");
+
+        Is(SubKinds.IsStage(SubKind.Launcher) && SubKinds.IsStage(SubKind.UpperStage) && !SubKinds.IsStage(SubKind.Block) && !SubKinds.IsStage(SubKind.Unfiled), true, "stage kinds");
+
         Console.WriteLine($"{passed} passed, {failed} failed");
         return failed == 0 ? 0 : 1;
     }

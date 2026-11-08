@@ -168,8 +168,8 @@ namespace PhilsBuilds
 
         void RefreshTabs()
         {
-            int[] counts = { Library.Craft.Count, Library.Subs.Count(s => s.Kind == SubKind.Launcher || s.Kind == SubKind.UpperStage),
-                             Library.Subs.Count(s => s.Kind != SubKind.Launcher && s.Kind != SubKind.UpperStage) };
+            int[] counts = { Library.Craft.Count, Library.Subs.Count(s => s.IsStage),
+                             Library.Subs.Count(s => !s.IsStage) };
             for (int i = 0; i < 3; i++)
             {
                 Btn b = tabButtons[i];
@@ -338,7 +338,7 @@ namespace PhilsBuilds
             {
                 // Ready copies count as well as flown ones (Phil's play-test), so not "flown".
                 RailHead("Hangar");
-                RailItem("Built copies", null, Library.Subs.Count(s => IsStage(s) && InHangar(s.Path)), launcherFilter == CopiesKey,
+                RailItem("Built copies", null, Library.Subs.Count(s => s.IsStage && InHangar(s.Path)), launcherFilter == CopiesKey,
                     () => { launcherFilter = CopiesKey; RebuildAll(); }, 26, good: true);
             }
             Kit.Text(rail, 16, H - TitleH - 76, RailW - 30, 64,
@@ -348,7 +348,7 @@ namespace PhilsBuilds
 
         void SubRail()
         {
-            List<SubFile> subs = Library.Subs.Where(s => s.Kind != SubKind.Launcher && s.Kind != SubKind.UpperStage).ToList();
+            List<SubFile> subs = Library.Subs.Where(s => !s.IsStage).ToList();
             RailItem("All subassemblies", null, subs.Count, subFilter == AllKey, () => { subFilter = AllKey; RebuildAll(); }, 26, bold: true);
             List<string> groups = subs.Where(s => s.Kind == SubKind.Block).Select(s => GroupOf(s)).Distinct(StringComparer.OrdinalIgnoreCase).OrderBy(x => x).ToList();
             if (groups.Count > 0)
@@ -384,7 +384,6 @@ namespace PhilsBuilds
             : craftFilter == CopiesKey ? c.Filed && Library.FamilyOf(c) is Family f && InHangar(f)
             : c.Category != null && c.Category.Id == craftFilter;
 
-        static bool IsStage(SubFile s) => s.Kind == SubKind.Launcher || s.Kind == SubKind.UpperStage;
 
         // ---- The middle column ---------------------------------------------------------------
 
@@ -679,7 +678,11 @@ namespace PhilsBuilds
             Kit.Rule(mid, 0, 87, MidW, 1);
         }
 
-        bool Fits(SubFile s) => s.Rated && s.Rating + 0.001f >= payloadMass && (s.Width <= 0 || payloadWidth <= 0 || s.Width + 0.01f >= payloadWidth);
+        // The one fit rule: a rated launcher fits unless the payload is heavier than it lifts,
+        // or wider than it carries (a width of 0 means not known).
+        bool TooHeavy(SubFile s) => s.Rating + 0.001f < payloadMass;
+        bool TooWide(SubFile s) => s.Width > 0 && payloadWidth > 0 && s.Width + 0.01f < payloadWidth;
+        bool Fits(SubFile s) => s.Rated && !TooHeavy(s) && !TooWide(s);
 
         void LauncherList()
         {
@@ -687,7 +690,7 @@ namespace PhilsBuilds
             RectTransform content = scroller.Content;
             if (launcherFilter == CopiesKey)
             {
-                List<SubFile> withCopies = Library.Subs.Where(s => IsStage(s) && InHangar(s.Path))
+                List<SubFile> withCopies = Library.Subs.Where(s => s.IsStage && InHangar(s.Path))
                     .OrderBy(s => s.Kind).ThenBy(s => s.Rated ? s.Rating : float.MaxValue).ThenBy(s => s.Name).ToList();
                 if (withCopies.Count == 0) Empty(content, "Nothing in the hangar", "Copies show here once they're built, and again when they come home.");
                 foreach (SubFile s in withCopies) y = LauncherRow(content, s, 16, y, w, false, false) + 7;
@@ -771,7 +774,7 @@ namespace PhilsBuilds
             if (s.Kind == SubKind.UpperStage)
                 sub = $"Upper stage{(s.Mass > 0 ? " · " + Naming.Tons(s.Mass) : "")}{(s.Stages > 0 ? $" · {s.Stages} stage{(s.Stages == 1 ? "" : "s")}" : "")}";
             else if (!s.Rated) sub = "Add a rating to check whether it fits.";
-            else if (dim) sub = s.Rating + 0.001f < payloadMass ? $"Rated {Naming.Tons(s.Rating)}. This payload is {Naming.Tons(payloadMass)}."
+            else if (dim) sub = TooHeavy(s) ? $"Rated {Naming.Tons(s.Rating)}. This payload is {Naming.Tons(payloadMass)}."
                 : $"Rated {Naming.Meters(s.Width)} wide. This payload is {Naming.Meters(payloadWidth)}.";
             else sub = $"Lifts {Naming.Tons(s.Rating)}{(s.Width > 0 ? " · up to " + Naming.Meters(s.Width) : "")}" +
                        $"{(s.Stages > 0 ? $" · {s.Stages} stage{(s.Stages == 1 ? "" : "s")}" : "")}{(s.Cost > 0 ? " · " + Naming.Funds(s.Cost) : "")}";
@@ -945,7 +948,7 @@ namespace PhilsBuilds
 
         IEnumerable<SubFile> SubsInView(bool search)
         {
-            IEnumerable<SubFile> subs = Library.Subs.Where(s => s.Kind != SubKind.Launcher && s.Kind != SubKind.UpperStage);
+            IEnumerable<SubFile> subs = Library.Subs.Where(s => !s.IsStage);
             if (subFilter == UnfiledKey) subs = subs.Where(s => s.Kind == SubKind.Unfiled);
             else if (subFilter != null && subFilter.StartsWith("b:")) subs = subs.Where(s => s.Kind == SubKind.Block && Naming.SameName(GroupOf(s), subFilter.Substring(2)));
             if (search && subSearch.Trim().Length > 0) subs = subs.Where(s => Has(s.Name, subSearch.Trim()));
@@ -1023,7 +1026,7 @@ namespace PhilsBuilds
                 if (held != null) Later(() => host.OpenSubDialog(null, held, kind));
                 // The craft is a launcher or upper stage from the library: over it, or its next mark.
                 else if (host.OpenStage() is SubFile open) Later(() => host.OpenStageSave(open));
-                else if (EditorLogic.RootPart != null && Stock.Ship != null && Stock.Ship.parts.Count > 0)
+                else if (EditorLogic.RootPart != null && Stock.HasCraft)
                     Later(() => host.OpenSubDialog(null, EditorLogic.RootPart, kind, wholeCraft: true));
             });
             dropState = -1;
@@ -1034,7 +1037,7 @@ namespace PhilsBuilds
         void RefreshDrop()
         {
             if (dropZone == null) return;
-            int state = Stock.Held != null ? 2 : EditorLogic.RootPart != null && Stock.Ship != null && Stock.Ship.parts.Count > 0 ? 1 : 0;
+            int state = Stock.Held != null ? 2 : EditorLogic.RootPart != null && Stock.HasCraft ? 1 : 0;
             if (state == dropState) return;
             dropState = state;
             bool hot = state == 2;
@@ -1062,10 +1065,10 @@ namespace PhilsBuilds
             else
             {
                 SubFile s = SelSub;
-                bool inTab = s != null && (tab == Tab.Launchers ? s.Kind == SubKind.Launcher || s.Kind == SubKind.UpperStage
-                                                               : s.Kind != SubKind.Launcher && s.Kind != SubKind.UpperStage);
+                bool inTab = s != null && (tab == Tab.Launchers ? s.IsStage
+                                                               : !s.IsStage);
                 if (!inTab) DetailHint(tab == Tab.Launchers ? "Pick a launcher" : "Pick a subassembly", "Pick it up from here to attach it, like any subassembly.");
-                else if (s.Kind == SubKind.Launcher || s.Kind == SubKind.UpperStage)
+                else if (s.IsStage)
                 {
                     if (SelCopy(s.Path) is CopyRow r && BuildsApi.OfFile(s.Path) is Design d) CopyPanel(d, r);
                     else LauncherDetail(s);
@@ -1306,7 +1309,7 @@ namespace PhilsBuilds
                 return;
             }
             float by = bottom - (caption != null ? 104 : 86);
-            if (IsStage(s) && Stock.Empty)
+            if (s.IsStage && Stock.Empty)
             {
                 // Nothing in the editor: a launcher or stage can be opened as the craft itself.
                 Track(Kit.Primary(detail, "Load", DX, by, DW - 8 - 104, 40, () => Later(() => host.LoadSub(s)), 16));
@@ -1342,7 +1345,7 @@ namespace PhilsBuilds
             if (s == null) return;
             selectedSubPath = s.Path;
             selectedCopyKey = null;
-            tab = s.Kind == SubKind.Launcher || s.Kind == SubKind.UpperStage ? Tab.Launchers : Tab.Subs;
+            tab = s.IsStage ? Tab.Launchers : Tab.Subs;
             if (tab == Tab.Subs) subFilter = AllKey;
             if (tab == Tab.Launchers && launcherFilter != AllKey) launcherFilter = AllKey;
         }

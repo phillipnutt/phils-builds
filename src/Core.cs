@@ -337,4 +337,71 @@ namespace PhilsBuilds
     // What a subassembly is, in the library. Block covers modules and building
     // blocks alike: anything with a name and a group (DESU, Control, Power…).
     public enum SubKind { Unfiled, Launcher, UpperStage, Block }
+
+    public static class SubKinds
+    {
+        // Launchers and upper stages: rated or marked like stages, kept on the Launchers tab.
+        public static bool IsStage(SubKind k) => k == SubKind.Launcher || k == SubKind.UpperStage;
+    }
+
+    // The names this mod writes on a launcher's parts, as KSP's per-part vessel naming
+    // (name, type, priority). KSP names a piece that drops away after its highest-priority
+    // named part, counting priorities above 0 only.
+    public static class StageNames
+    {
+        public const int LabelPriority = 1, RootPriority = 2, PayloadPriority = 3;
+        public const int OldLabelPriority = -1, OldPayloadPriority = 1;     // Phil's Builds 0.1.0
+
+        static readonly Regex Shape = new Regex(@"^(.*?) (Stage \d+|Booster)$");
+
+        // "Cypress 010 Stage 1" -> "Cypress 010"; a bare launcher name stays as it is.
+        public static string LauncherPart(string name)
+        {
+            if (string.IsNullOrEmpty(name)) return null;
+            Match m = Shape.Match(name);
+            return m.Success ? m.Groups[1].Value : name;
+        }
+
+        // The one rule for "this naming is a stage name this mod wrote", on a part in the
+        // editor or in a saved file: at a stage's priority, debris or stage-shaped
+        // ("Oak 030 Stage 1", "Oak 030 Booster"), for one of this save's launchers (now
+        // or before a rename or delete), so a name the player typed is left alone.
+        // `anyLauncher` also takes a stage-shaped name from any launcher: a launcher or
+        // upper stage being saved gets fresh names whenever it's placed.
+        public static bool IsLabel(string name, bool debris, int priority, Func<string, bool> isLauncher, bool anyLauncher = false)
+        {
+            if (string.IsNullOrEmpty(name) || priority != LabelPriority && priority != OldLabelPriority) return false;
+            bool shaped = Shape.IsMatch(name);
+            if (!debris && !shaped) return false;
+            return anyLauncher && shaped || isLauncher != null && isLauncher(LauncherPart(name));
+        }
+    }
+
+    // Files and folders, compared the one way: full paths, any case, a trailing slash or not.
+    public static class Paths
+    {
+        static string Full(string p) => System.IO.Path.GetFullPath(p).TrimEnd('\\', '/');
+
+        public static bool Same(string a, string b)
+        {
+            if (string.IsNullOrEmpty(a) || string.IsNullOrEmpty(b)) return false;
+            try { return string.Equals(Full(a), Full(b), StringComparison.OrdinalIgnoreCase); }
+            catch { return false; }
+        }
+
+        // Where `folder` sits under `root`, folders joined with '/' ("" for the root
+        // itself), or null when it's somewhere else.
+        public static string Under(string root, string folder)
+        {
+            if (string.IsNullOrEmpty(root) || string.IsNullOrEmpty(folder)) return null;
+            try
+            {
+                string r = Full(root), f = Full(folder);
+                if (string.Equals(r, f, StringComparison.OrdinalIgnoreCase)) return "";
+                if (!f.StartsWith(r + "\\", StringComparison.OrdinalIgnoreCase) && !f.StartsWith(r + "/", StringComparison.OrdinalIgnoreCase)) return null;
+                return f.Substring(r.Length + 1).Replace('\\', '/');
+            }
+            catch { return null; }
+        }
+    }
 }

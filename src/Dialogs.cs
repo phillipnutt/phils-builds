@@ -296,9 +296,11 @@ namespace PhilsBuilds
             if (filing != null && Marks.TryParse(filing.Name, out _, out MarkStyle s, out _)) style = s;
             // A name already typed in KSP's name box (or the old craft's own name) is
             // used, mark and all, and if a family of that name exists this adds to it.
-            // Only a craft still called "Untitled Space Craft" gets a dealt name.
+            // Only a craft still called "Untitled Space Craft" gets a dealt name, or (in the
+            // editor) one named after a launcher it was opened as: what's built on it is a
+            // new design, so it gets a name of its own.
             string typed = filing != null ? filing.Base : Stock.ShipName;
-            if (!string.IsNullOrEmpty(typed) && !IsDefault(typed) && !(filing == null && IsStageName(typed)))
+            if (!(filing == null ? Stock.IsPlaceholderName(typed) : Stock.IsDefaultName(typed)))
             {
                 string fam = Naming.FamilyPart(typed);
                 Family match = Library.Families.FirstOrDefault(f => f.Facility == Facility && Naming.SameName(f.Name, fam));
@@ -319,12 +321,6 @@ namespace PhilsBuilds
         string Facility => filing?.Facility ?? Stock.Facility;
 
         static Category Guess() => Category.ById(Stock.Facility == "SPH" ? "Spaceplanes" : "Probes");
-
-        static bool IsDefault(string n) => Stock.IsDefaultName(n);
-
-        // A craft started from a launcher opened on its own carries the launcher's name;
-        // what's built on it is a new design, so it gets a name of its own.
-        static bool IsStageName(string n) => Library.StageNamed(n) != null;
 
         public static string StageLabel(SubKind kind) => (kind == SubKind.Launcher ? "Launcher" : "Upper stage") + " · to the Launchers tab";
 
@@ -558,23 +554,13 @@ namespace PhilsBuilds
             string folder = Stock.SaveFolder;
             int top = mark;
             foreach (CraftFile c in Library.Craft)
-                if (c.Mark > top && Naming.SameName(c.Base, rest) && (SameFolder(c.Path, folder) || c.Filed && c.Facility == Stock.Facility))
+                if (c.Mark > top && Naming.SameName(c.Base, rest) && (Paths.Same(System.IO.Path.GetDirectoryName(c.Path), folder) || c.Filed && c.Facility == Stock.Facility))
                 {
                     top = c.Mark;
                     newest = c.Name;
                 }
             next = rest + " " + Marks.Format(style, top + 1);
             Open($"Save {rest}", marked ? $"You have Mark {Marks.Short(s, mark)} open. What did you make?" : "What did you make?", 560, 380);
-        }
-
-        static bool SameFolder(string file, string folder)
-        {
-            try
-            {
-                return folder != null && string.Equals(System.IO.Path.GetFullPath(System.IO.Path.GetDirectoryName(file)).TrimEnd('\\', '/'),
-                    System.IO.Path.GetFullPath(folder).TrimEnd('\\', '/'), StringComparison.OrdinalIgnoreCase);
-            }
-            catch { return false; }
         }
 
         protected override void BuildBody()
@@ -687,7 +673,7 @@ namespace PhilsBuilds
                 if (editing.Kind == SubKind.Unfiled) GuessFromName(editing.Name);
             }
             else blockName = wholeCraft ? Stock.ShipName : held?.partInfo?.title ?? "";
-            if (family.Length == 0 && (this.kind == SubKind.Launcher || this.kind == SubKind.UpperStage)) Deal();
+            if (family.Length == 0 && SubKinds.IsStage(this.kind)) Deal();
             string title = editing == null ? "Save a subassembly" : editing.Kind == SubKind.Unfiled ? $"File {editing.Name}" : $"Change {editing.Name}";
             Open(title, editing != null ? "Sets what it is and names it to match" : wholeCraft ? "The whole craft in the editor" : $"{held?.partInfo?.title ?? "The held part"} and everything under it", 600, 660);
         }
@@ -728,7 +714,7 @@ namespace PhilsBuilds
         {
             get
             {
-                if (kind != SubKind.Launcher && kind != SubKind.UpperStage) return 1;
+                if (!SubKinds.IsStage(kind)) return 1;
                 IEnumerable<SubFile> same = Library.Subs.Where(s => s != editing && s.Kind == kind && Naming.SameName(s.Family, family) &&
                                                                     (kind != SubKind.Launcher || Naming.Code(s.Rating) == Naming.Code(tons)));
                 if (editing != null && editing.Kind == kind && Naming.SameName(editing.Family, family) &&
@@ -768,7 +754,7 @@ namespace PhilsBuilds
             y = Segments(y, KindLabels, Array.IndexOf(Kinds, kind), i =>
             {
                 kind = Kinds[i];
-                if (!nameTyped && (kind == SubKind.Launcher || kind == SubKind.UpperStage)) { cursor = 0; Deal(); }
+                if (!nameTyped && SubKinds.IsStage(kind)) { cursor = 0; Deal(); }
                 Rebuild();
             });
 
@@ -794,7 +780,7 @@ namespace PhilsBuilds
                 y += 30;
             }
 
-            if (kind == SubKind.Launcher || kind == SubKind.UpperStage)
+            if (SubKinds.IsStage(kind))
             {
                 y = Label(y, "Family name");
                 familyField = Kit.Input(body, Pad, y, W - 2 * Pad - 150, 42, family, "Type a name", v => { family = v; nameTyped = true; RefreshPreview(); },

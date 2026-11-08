@@ -44,8 +44,11 @@ namespace PhilsBuilds
 
         public static ShipConstruct Ship => Editor?.ship;
 
+        // Any parts in the editor's craft.
+        public static bool HasCraft => Ship?.parts != null && Ship.parts.Count > 0;
+
         // Nothing built yet (a part held over an empty editor doesn't count).
-        public static bool Empty => Ship?.parts == null || Ship.parts.Count == 0 || HoldingCraft && Ship.parts.Count == 1;
+        public static bool Empty => !HasCraft || HoldingCraft && Ship.parts.Count == 1;
 
         // The craft itself is on the cursor, held by its root part. Picking something else up
         // would delete it, as clicking the parts list does.
@@ -55,6 +58,11 @@ namespace PhilsBuilds
         public static bool IsDefaultName(string n) =>
             string.IsNullOrEmpty(n?.Trim()) || Naming.SameName(n, "Untitled Space Craft") || Naming.SameName(n, "Auto-Saved Ship") ||
             Naming.SameName(n, EditorLogic.autoShipName);
+
+        // A name the craft has only for now: KSP's own, or a launcher's or upper stage's
+        // (the craft was loaded or picked up as one). A stage put in as the whole craft
+        // replaces it, and the Save panel deals a new one rather than use it.
+        public static bool IsPlaceholderName(string n) => IsDefaultName(n) || Library.StageNamed(n) != null || Library.IsLauncherName(n);
 
         public static Part Held => EditorLogic.SelectedPart;
 
@@ -88,7 +96,7 @@ namespace PhilsBuilds
                 Find();
                 try
                 {
-                    if (Editor == null || Editor.ship == null || Editor.ship.parts.Count == 0) return false;
+                    if (!HasCraft) return false;
                     return (int)undoLevel.GetValue(Editor) != (int)undoIndexAtLastSave.GetValue(Editor);
                 }
                 catch { return false; }

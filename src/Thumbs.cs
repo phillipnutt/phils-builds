@@ -22,6 +22,8 @@ namespace PhilsBuilds
 
         public static bool Has(string sub) => !string.IsNullOrEmpty(sub) && File.Exists(FileFor(sub));
 
+        public static void TakeIfMissing(ShipConstruct sc, string sub) { if (!Has(sub)) Take(sc, sub); }
+
         public static Texture2D Of(SubFile s)
         {
             if (s == null) return null;
