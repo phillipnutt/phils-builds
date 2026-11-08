@@ -132,6 +132,87 @@ Checks: `Tools/Test-Core.ps1` runs 67 checks on the naming rules; `Tools/Check-N
     Re-root tool does.
   - Phil isn't sure it's worth it. Banked until he's shared more thoughts.
 
+## Proposed: hooks for Phil's Reusability Suite (not agreed yet, nothing built)
+
+Phil's Reusability Suite is a separate career mod that requires Phil's Builds. Its design asks for six
+optional hooks. The rule: **Phil's Builds without the suite behaves exactly as now.** Every hook is
+something the suite reads or subscribes to. If nobody subscribes, nothing runs and nothing is drawn.
+
+All of it lives in one public static class, `PhilsBuilds.BuildsApi`, plus a few plain data classes. The
+suite references `PhilsBuilds.dll` directly.
+
+1. **Read the library.**
+   - `BuildsApi.Version` (an int) gives the API version.
+   - `BuildsApi.Designs()` returns every craft and subassembly in the save as `Design` snapshots. Each has:
+     - Id and FamilyId;
+     - Name, Family, Mark (a number), MarkText and Kind (Craft, Launcher, UpperStage or Block);
+     - Category and CategoryLabel, and Facility (VAB or SPH);
+     - Tons and Width, for launchers and upper stages;
+     - Group, Notes and Path.
+   - `Find(id)` and `OfFile(path)` look one up.
+   - A `LibraryChanged` event fires after any save, filing, rename, re-rating or delete.
+   - **New: stable ids.** Designs are only known by file path today, and a path changes when a family is
+     renamed, a craft is filed or a launcher is re-rated ("Oak 030" to "Oak 060").
+     - Phil's Builds would give each design file an Id in its save file (`PhilsBuilds.cfg`), and each
+       family a FamilyId.
+     - It carries both across every move and rename it does.
+     - Ids are given out the first time a design is seen, so existing saves need nothing done.
+2. **Design placed.**
+   - `event Action<Placed> DesignPlaced` fires after Load, Merge or pick-up from the library. It carries:
+     - Design;
+     - How (Load, Merge or PickUp);
+     - Parts, where `Parts[i]` is slot *i*.
+   - **A slot is the part's position in the design file**, the order KSP writes and reads parts.
+   - For Merge and pick-up, Phil's Builds would build the craft itself, which also tells it each part's
+     slot:
+     1. `ShipConstruction.CreateConstructFromTemplate`, whose parts come back in file order.
+     2. `EditorLogic.SpawnConstruct`.
+     This is what stock's pick-up does inside anyway. Both calls are public in 1.12.5.
+   - For a full Load, the editor's ship part list is in file order.
+   - Confirm both orders in game before relying on them.
+   - After stamping, the suite's own part module carries the stamps through saves, reverts and launches.
+     Phil's Builds doesn't need to report anything again.
+3. **Design saved.**
+   - `event Action<Saved> DesignSaved` fires after Save over, Save as next mark, filing and subassembly
+     saves. It carries:
+     - Design;
+     - NewMark;
+     - Parts, in the order written: the editor ship's part list for craft, and the saved construct's for
+       subassemblies.
+   - Saving over a mark changes its slots. So the suite should keep its own copy of the design file with
+     each build or launch record. Then a flown stage is always completed from the version it was built
+     as, even if the file changes later.
+4. **Hangar copies in the window.**
+   - `BuildsApi.SetCopies(ICopies provider)` registers the suite (null removes it). Until something
+     registers, the window is unchanged.
+   - `ICopies` has:
+     - `CopiesOf(design)`: the rows under a design, New included if wanted. Each row has Label ("#4"),
+       Text, Warning ("missing 1 grid fin"), Price ("30,510 · 1.1 days"), Reserved and ReservedText.
+     - `Note(design)`: the green line on the design's row ("2 flown first stages in the hangar").
+     - `Detail(design, row)`: the side panel, with eyebrow, title, chips, cost lines, total, flight log and
+       hint.
+   - Phil's Builds draws all of it in its own look, as in the approved suite mockup (Launchers tab with
+     hangar copies).
+   - It works the same on the Craft and Launchers tabs. The rail gets a "Hangar" section with "With flown
+     copies" and its count. Phil's Builds counts the designs whose `CopiesOf` has a flown row.
+   - Reserved rows are greyed out and can't be picked.
+   - The tab counts in the mockup (Craft 37, Launchers 6) are plain library counts. Phil's Builds can show
+     them with or without the suite.
+5. **Picking a copy.**
+   - `ICopies.Build(design, row, Action<ShipConstruct> hold)` hands the pick to the suite, which builds
+     the construct: the flown first stage plus new parts from the design.
+   - It calls `hold(ship)` when ready, or `hold(null)` to cancel. It can take more than a frame.
+   - Phil's Builds then closes the window, puts the construct on the cursor with `SpawnConstruct`, and
+     names its spent stages the way it does for launchers now.
+   - `SpawnConstruct` holds a construct by its root part. To hang it under a payload, the suite roots the
+     construct at its top part. This is the same root-part issue as the banked Merge idea above.
+6. **Is this filed?**
+   - `BuildsApi.Current` is the open craft's `Design`, or null if it isn't filed.
+   - `BuildsApi.OpenSave()` opens the Save panel, for the Build panel's "file it now" button.
+
+Timing: the suite needs these at its own step 5 (the Phil's Builds link). Its first four steps don't need
+them.
+
 ## Notes for building
 
 - KSP 1.12's craft browser has a folder tree (`KSP.UI.Screens.DirectoryController` exists). Confirm in game.
