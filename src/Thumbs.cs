@@ -13,7 +13,8 @@ namespace PhilsBuilds
 {
     static class Thumbs
     {
-        static readonly Dictionary<string, Texture2D> cache = new Dictionary<string, Texture2D>(StringComparer.OrdinalIgnoreCase);
+        // One picture per file, kept until the file changes; the old one is freed then.
+        static readonly Dictionary<string, KeyValuePair<long, Texture2D>> cache = new Dictionary<string, KeyValuePair<long, Texture2D>>(StringComparer.OrdinalIgnoreCase);
 
         static string Name(string sub) => KSPUtil.SanitizeString($"{HighLogic.SaveFolder}_Subassemblies_{sub}", '_', true);
 
@@ -28,11 +29,16 @@ namespace PhilsBuilds
             try
             {
                 if (!File.Exists(file)) return null;
-                string key = file + "|" + File.GetLastWriteTimeUtc(file).Ticks;
-                if (cache.TryGetValue(key, out Texture2D t)) return t;
-                t = new Texture2D(2, 2, TextureFormat.ARGB32, false) { hideFlags = HideFlags.HideAndDontSave };
+                long ticks = File.GetLastWriteTimeUtc(file).Ticks;
+                if (cache.TryGetValue(file, out KeyValuePair<long, Texture2D> had))
+                {
+                    if (had.Key == ticks) return had.Value;
+                    if (had.Value != null) UnityEngine.Object.Destroy(had.Value);
+                }
+                Texture2D t = new Texture2D(2, 2, TextureFormat.ARGB32, false) { hideFlags = HideFlags.HideAndDontSave };
                 if (!t.LoadImage(File.ReadAllBytes(file))) { UnityEngine.Object.Destroy(t); t = null; }
-                return cache[key] = t;
+                cache[file] = new KeyValuePair<long, Texture2D>(ticks, t);
+                return t;
             }
             catch (Exception e)
             {
@@ -50,7 +56,14 @@ namespace PhilsBuilds
             var hidden = new List<Renderer>();
             try
             {
-                IEnumerable<Part> others = (Stock.Ship?.parts ?? new List<Part>()).Where(p => p != null && !keep.Contains(p));
+                // The craft's parts, and anything else on the cursor: a held part's mirrored
+                // copies aren't in the craft's part list until they're attached.
+                var all = new HashSet<Part>(Stock.Ship?.parts ?? new List<Part>());
+                Part held = Stock.Held;
+                if (held != null)
+                    foreach (Part twin in held.symmetryCounterparts.Prepend(held))
+                        foreach (Part q in LauncherTags.Subtree(twin)) all.Add(q);
+                IEnumerable<Part> others = all.Where(p => p != null && !keep.Contains(p));
                 foreach (Part p in others)
                     foreach (Renderer r in p.GetComponentsInChildren<Renderer>())
                         if (r.enabled && !keep.Contains(r.GetComponentInParent<Part>()))

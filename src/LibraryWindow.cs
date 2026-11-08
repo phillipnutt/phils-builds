@@ -647,7 +647,7 @@ namespace PhilsBuilds
             payloadMass = payloadWidth = 0;
             ShipConstruct ship = Stock.Ship;
             if (ship?.parts == null) return;
-            List<Part> parts = ship.parts.Where(p => !LauncherTags.IsLauncherPart(p)).ToList();
+            List<Part> parts = LauncherTags.PayloadOf(ship);
             if (parts.Count == 0) return;
             payloadMass = parts.Sum(p => p.mass + p.GetResourceMass());
             try

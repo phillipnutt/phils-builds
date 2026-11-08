@@ -45,7 +45,11 @@ namespace PhilsBuilds
         public static ShipConstruct Ship => Editor?.ship;
 
         // Nothing built yet (a part held over an empty editor doesn't count).
-        public static bool Empty => Ship?.parts == null || Ship.parts.Count == 0 || Held != null && Held == EditorLogic.RootPart;
+        public static bool Empty => Ship?.parts == null || Ship.parts.Count == 0 || HoldingCraft && Ship.parts.Count == 1;
+
+        // The craft itself is on the cursor, held by its root part. Picking something else up
+        // would delete it, as clicking the parts list does.
+        public static bool HoldingCraft => Held != null && Held == EditorLogic.RootPart;
 
         // KSP's own names for a craft nobody has named yet.
         public static bool IsDefaultName(string n) =>

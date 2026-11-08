@@ -408,8 +408,17 @@ namespace PhilsBuilds
 
         // ---- Subassemblies ----------------------------------------------------------------------
 
+        // A whole craft on the cursor would be deleted by picking something else up.
+        static bool HandsFull()
+        {
+            if (!Stock.HoldingCraft || Stock.Empty) return false;
+            Say("Put down the craft you're holding first");
+            return true;
+        }
+
         public void PickUp(SubFile s)
         {
+            if (HandsFull()) return;
             window.Close();
             Design d = BuildsApi.OfFile(s.Path);
             string launcher = s.Kind == SubKind.Launcher ? s.Name : null;
@@ -432,6 +441,7 @@ namespace PhilsBuilds
         {
             if (s == null) return;
             if (!IsStage(s) || !Stock.Empty) { PickUp(s); return; }
+            if (HandsFull()) return;
             window.Close();
             placing = BuildsApi.OfFile(s.Path);
             placingHow = PlaceHow.Load;
@@ -468,7 +478,7 @@ namespace PhilsBuilds
                 return;
             }
             ICopies copies = BuildsApi.Copies;
-            if (copies == null) return;
+            if (copies == null || HandsFull()) return;
             window.Close();
             string name = (d.Kind == DesignKind.Launcher || d.Kind == DesignKind.UpperStage) && Stock.Empty ? d.Name : null;
             try
@@ -517,7 +527,7 @@ namespace PhilsBuilds
                 Library.Scan();
                 s = Library.SubNamed(name);
                 if (s == null) throw new IOException("It saved, but under a different name.");
-                StripLauncherNames(s.Path);
+                StripLauncherNames(s.Path, info.Kind == SubKind.Launcher || info.Kind == SubKind.UpperStage);
             }
             else if (s != null && !Naming.SameName(s.Name, name) || s != null && s.Name != name)
             {
@@ -540,9 +550,12 @@ namespace PhilsBuilds
             if (saved != null) BuildsApi.RaiseSaved(BuildsApi.OfFile(path), !existed, saved);
         }
 
-        // A launcher saved from a craft that was built on one carries the old stage
-        // names; they come off, and it gets fresh ones when it's next picked up.
-        static void StripLauncherNames(string path)
+        // A subassembly saved from a craft that was built on a library launcher carries
+        // its stage names; they come off, and a launcher gets fresh ones when it's next
+        // picked up. Only the parts' VESSELNAMING nodes are looked at, and only names this
+        // mod writes: stage names of launchers in the library, and (saving a launcher or
+        // upper stage) the craft name a lone launcher's top part carried.
+        static void StripLauncherNames(string path, bool stage)
         {
             try
             {
@@ -552,12 +565,11 @@ namespace PhilsBuilds
                 string label = LauncherTags.LauncherPriority.ToString(), old = LauncherTags.OldLauncherPriority.ToString(), top = LauncherTags.RootPriority.ToString();
                 ConfigNode[] parts = root.GetNodes("PART");
                 for (int i = 0; i < parts.Length; i++)
-                    foreach (ConfigNode n in parts[i].GetNodes().ToArray())
+                    foreach (ConfigNode n in parts[i].GetNodes("VESSELNAMING"))
                     {
-                        string pri = n.GetValue("priority");
-                        // Stage labels anywhere; the craft name a lone launcher's top part carried.
-                        bool ours = n.HasValue("name") && ((pri == label || pri == old) && (n.GetValue("type") == "Debris" || LauncherTags.IsLabelName(n.GetValue("name"))) ||
-                                                           i == 0 && pri == top);
+                        string pri = n.GetValue("priority"), name = n.GetValue("name");
+                        bool ours = (pri == label || pri == old) && LauncherTags.IsLabelName(name) ||
+                                    stage && i == 0 && pri == top && n.GetValue("type") != "Debris";
                         if (!ours) continue;
                         parts[i].RemoveNode(n);
                         changed = true;
