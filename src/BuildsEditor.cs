@@ -25,13 +25,20 @@ namespace PhilsBuilds
     [KSPAddon(KSPAddon.Startup.EditorAny, false)]
     public class BuildsEditor : MonoBehaviour
     {
+        public static BuildsEditor Instance { get; private set; }
+
         LibraryWindow window;
         Dialog dialog;
         Button.ButtonClickedEvent ourLoad, ourSave;
         string lastPayloadName;
-        string pendingTag;
-        int pendingTagFrames, hookCheck;
+        int hookCheck;
         bool hooked;
+        // A load or merge from the library, waiting for the editor to say it's done.
+        Design placing;
+        PlaceHow placingHow;
+        int placingFrames;
+
+        void Awake() => Instance = this;
 
         void Start()
         {
@@ -44,6 +51,7 @@ namespace PhilsBuilds
 
         void OnDestroy()
         {
+            if (Instance == this) Instance = null;
             GameEvents.onEditorShipModified.Remove(OnShipModified);
             GameEvents.onEditorLoad.Remove(OnEditorLoad);
             dialog?.Close();
@@ -92,19 +100,7 @@ namespace PhilsBuilds
                 HookButtons();
                 Stock.HideStockSubassemblies();
             }
-            if (pendingTag != null)
-            {
-                Part held = Stock.Held;
-                if (held != null)
-                {
-                    LauncherTags.Tag(held, pendingTag);
-                    Category cat = CurrentCategory();
-                    LauncherTags.EnsurePayload(Stock.Ship, new System.Collections.Generic.HashSet<Part>(LauncherTags.Subtree(held)), Stock.ShipName,
-                        PayloadType(cat), ref lastPayloadName);
-                    pendingTag = null;
-                }
-                else if (--pendingTagFrames <= 0) pendingTag = null;
-            }
+            if (placing != null && --placingFrames <= 0) placing = null;
             window?.Update();
             dialog?.Update();
         }
@@ -123,6 +119,14 @@ namespace PhilsBuilds
 
         void OnEditorLoad(ShipConstruct ship, CraftBrowserDialog.LoadType type)
         {
+            // The editor's parts come in file order, so they're the design's slots.
+            if (placing != null && ship?.parts != null &&
+                placingHow == (type == CraftBrowserDialog.LoadType.Merge ? PlaceHow.Merge : PlaceHow.Load))
+            {
+                Design d = placing;
+                placing = null;
+                BuildsApi.RaisePlaced(d, placingHow, ship.parts);
+            }
             if (type != CraftBrowserDialog.LoadType.Normal) { Relabel(); return; }
             lastPayloadName = null;
             AdoptFolder(EditorDriver.filePathToLoad);
@@ -201,6 +205,11 @@ namespace PhilsBuilds
 
         public void CloseWindow() => window.Close();
 
+        public void RefreshWindow()
+        {
+            if (window != null && window.IsOpen) window.Refresh();
+        }
+
         public void DialogClosed(Dialog d)
         {
             if (dialog == d) dialog = null;
@@ -264,15 +273,19 @@ namespace PhilsBuilds
         public void QuickSave()
         {
             Relabel();
-            Stock.Save(AfterSave);
+            bool existed = FileExists(Stock.CurrentFile);
+            Stock.Save(() => AfterSave(existed));
         }
 
         public void SaveAs(string name)
         {
             Stock.ShipName = name;
             Relabel();
-            Stock.Save(() => { AfterSave(); Say($"Saved {name}"); });
+            bool existed = FileExists(Stock.CurrentFile);
+            Stock.Save(() => { AfterSave(existed); Say($"Saved {name}"); });
         }
+
+        static bool FileExists(string path) => !string.IsNullOrEmpty(path) && File.Exists(path);
 
         public void SaveInto(string folder, string name, Category cat)
         {
@@ -284,9 +297,10 @@ namespace PhilsBuilds
             Stock.ShipName = name;
             lastPayloadName = null;
             Relabel();
+            bool existed = FileExists(Stock.CurrentFile);
             Stock.Save(() =>
             {
-                AfterSave();
+                AfterSave(existed);
                 if (moveOld && File.Exists(Stock.CurrentFile ?? "") && !string.Equals(Path.GetFullPath(oldFile), Path.GetFullPath(Stock.CurrentFile), StringComparison.OrdinalIgnoreCase))
                 {
                     try { Library.DeleteCraft(old); } catch (Exception e) { Debug.LogWarning($"[PhilsBuilds] Couldn't move the old copy: {e.Message}"); }
@@ -296,8 +310,9 @@ namespace PhilsBuilds
             });
         }
 
-        // Writes down what the save remembers about the craft just saved.
-        void AfterSave()
+        // Writes down what the save remembers about the craft just saved, and tells
+        // anyone listening which parts went into it.
+        void AfterSave(bool existedBefore)
         {
             try
             {
@@ -311,6 +326,8 @@ namespace PhilsBuilds
                 Library.Scan();
                 Library.SetNote(key, launcher, launcher != null ? LauncherTags.PayloadMass(Stock.Ship) : 0);
                 if (window.IsOpen) window.Refresh();
+                // Stock writes the editor's parts in their list order.
+                if (Stock.Ship?.parts != null) BuildsApi.RaiseSaved(BuildsApi.OfFile(file), !existedBefore, Stock.Ship.parts);
             }
             catch (Exception e) { Debug.LogWarning($"[PhilsBuilds] After save: {e.Message}"); }
         }
@@ -376,6 +393,9 @@ namespace PhilsBuilds
         {
             if (!merge && !force && Stock.Unsaved) return;     // the window asks first
             window.Close();
+            placing = BuildsApi.OfFile(c.Path);                 // null for an unfiled craft
+            placingHow = merge ? PlaceHow.Merge : PlaceHow.Load;
+            placingFrames = 30;
             if (merge) Stock.Merge(c.Path);
             else Stock.Load(c.Path);
         }
@@ -385,12 +405,54 @@ namespace PhilsBuilds
         public void PickUp(SubFile s)
         {
             window.Close();
-            if (!Stock.PickUp(s.Path)) { Say($"Couldn't pick up {s.Name}"); return; }
-            if (s.Kind == SubKind.Launcher)
+            Design d = BuildsApi.OfFile(s.Path);
+            string launcher = s.Kind == SubKind.Launcher ? s.Name : null;
+            if (!Stock.PickUp(s.Path, sc => Spawned(sc, d, PlaceHow.PickUp, launcher, null))) Say($"Couldn't pick up {s.Name}");
+        }
+
+        // A hangar copy from the window: New picks up the design itself; anything else
+        // is built by the mod that keeps the hangar, then held here.
+        public void PickUpCopy(Design d, CopyRow row)
+        {
+            if (d == null || row == null || row.Reserved) return;
+            if (row.IsNew)
             {
-                pendingTag = s.Name;
-                pendingTagFrames = 30;
+                SubFile s = Library.Subs.FirstOrDefault(x => SamePath(x.Path, d.Path));
+                CraftFile c = s == null ? Library.CraftAt(d.Path) : null;
+                if (s != null) PickUp(s);
+                else if (c != null) LoadCraft(c, merge: true);
+                return;
             }
+            ICopies copies = BuildsApi.Copies;
+            if (copies == null) return;
+            window.Close();
+            try
+            {
+                copies.Build(d, row, sc =>
+                {
+                    if (this == null || sc == null || !Stock.Hold(sc)) return;
+                    Spawned(sc, d, PlaceHow.Copy, d.Kind == DesignKind.Launcher ? d.Name : null, row.Id);
+                });
+            }
+            catch (Exception e)
+            {
+                Debug.LogError($"[PhilsBuilds] Couldn't build {d.Name} {row.Label}: {e}");
+                Say($"Couldn't build {d.Name} {row.Label}");
+            }
+        }
+
+        // Parts are on the cursor (or are the craft, on an empty editor): name a
+        // launcher's spent stages, and say where the parts came from.
+        void Spawned(ShipConstruct sc, Design d, PlaceHow how, string launcher, string copyId)
+        {
+            if (launcher != null)
+            {
+                Part root = Stock.Held ?? sc.parts[0].localRoot;
+                LauncherTags.Tag(root, launcher);
+                LauncherTags.EnsurePayload(Stock.Ship, new System.Collections.Generic.HashSet<Part>(LauncherTags.Subtree(root)), Stock.ShipName,
+                    PayloadType(CurrentCategory()), ref lastPayloadName);
+            }
+            if (d != null) BuildsApi.RaisePlaced(d, how, sc.parts, copyId);
         }
 
         public void OpenSubDialog(SubFile existing, Part held, SubKind kind, bool wholeCraft = false) =>
@@ -399,9 +461,12 @@ namespace PhilsBuilds
         public void SaveSub(SubFile editing, Part held, string name, SubFile info)
         {
             SubFile s = editing;
+            System.Collections.Generic.List<Part> saved = null;
+            bool existed = FileExists(Path.Combine(Library.SubsDir, name + ".craft"));
             if (held != null)
             {
-                if (!Stock.SaveSubassembly(name, "", held)) throw new IOException("KSP couldn't save it.");
+                saved = Stock.SaveSubassembly(name, "", held);
+                if (saved == null) throw new IOException("KSP couldn't save it.");
                 Library.Scan();
                 s = Library.SubNamed(name);
                 if (s == null) throw new IOException("It saved, but under a different name.");
@@ -422,8 +487,10 @@ namespace PhilsBuilds
             s.Mark = info.Mark;
             Library.SaveStore();
             EditorPartList.Instance?.RefreshSubassemblies();
+            string path = s.Path;
             Refresh(selectSub: Library.SubNamed(name));
             Say($"Saved {name}");
+            if (saved != null) BuildsApi.RaiseSaved(BuildsApi.OfFile(path), !existed, saved);
         }
 
         // A launcher saved from a craft that was built on one carries the old stage

@@ -39,6 +39,15 @@ VESSEL_NAMES
 
 Launcher lists also take `class = Light`, `Medium`, `Heavy` or `SuperHeavy`.
 
+## For other mods
+
+`PhilsBuilds.BuildsApi`, in `src/Api.cs`, lets another mod:
+- read the library, where each design has a stable id;
+- hear when parts from a design are placed in the editor or saved;
+- show its own built copies of a design (a hangar) in the library window.
+
+Nothing changes unless a mod uses it.
+
 ## License
 
 MIT. Copyright Phil Nutt.

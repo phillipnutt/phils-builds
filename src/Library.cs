@@ -1,9 +1,9 @@
 // The library: every craft and subassembly in this save, sorted into
-// categories, families, members and marks.
+// categories, families and marks.
 //
 // Craft are filed as real folders, Ships/<VAB|SPH>/<Category>/<Family>/<Name>.craft,
 // so they stay sorted in the stock load dialog even without this mod. A craft's
-// name gives its member and mark ("Haven Lab II": member "Haven Lab", mark 2).
+// name gives its family and mark ("Haven Lab II": family "Haven Lab", mark 2).
 // Subassemblies stay in the flat Subassemblies folder (the only place stock reads
 // them from); what kind each one is, and launcher ratings, live in this save's
 // PhilsBuilds.cfg.
@@ -32,6 +32,7 @@ namespace PhilsBuilds
         public float Mass, Cost;
         public Vector3 Size;
         public bool StatsLoaded;
+        public string Id, Line;             // stable ids (filed craft only), from the save's own file
         public bool Filed => Category != null;
     }
 
@@ -62,6 +63,7 @@ namespace PhilsBuilds
         public Vector3 Size;
         public bool StatsLoaded;
         public readonly List<string> Contents = new List<string>();     // part titles, most common first
+        public string Id, Line;             // stable ids (filed subassemblies only), from the save's own file
         public bool Rated => Kind == SubKind.Launcher && Rating > 0;
         public float Diameter => Mathf.Max(Size.x, Size.z);
     }
@@ -74,6 +76,12 @@ namespace PhilsBuilds
         public float Payload;
     }
 
+    // A design's stable ids: its own, and its design line's (shared by its marks).
+    public class DesignIds
+    {
+        public string Id, Line;
+    }
+
     public static class Library
     {
         public static readonly List<CraftFile> Craft = new List<CraftFile>();
@@ -82,8 +90,10 @@ namespace PhilsBuilds
         public static readonly Dictionary<string, CraftNote> Notes = new Dictionary<string, CraftNote>(StringComparer.OrdinalIgnoreCase);
         static readonly Dictionary<string, ConfigNode> subNodes = new Dictionary<string, ConfigNode>(StringComparer.OrdinalIgnoreCase);
         static readonly Dictionary<string, MarkStyle> familyStyles = new Dictionary<string, MarkStyle>(StringComparer.OrdinalIgnoreCase);
+        static readonly Dictionary<string, DesignIds> designIds = new Dictionary<string, DesignIds>(StringComparer.OrdinalIgnoreCase);
 
         public static int Version { get; private set; }
+        static string scannedSave;
 
         public static string SaveDir => System.IO.Path.Combine(KSPUtil.ApplicationRootPath, "saves", HighLogic.SaveFolder ?? "");
         public static string ShipsDir(string facility) => System.IO.Path.Combine(SaveDir, "Ships", facility);
@@ -119,7 +129,17 @@ namespace PhilsBuilds
                     try { Subs.Add(ReadSub(file)); }
                     catch (Exception e) { Debug.LogWarning($"[PhilsBuilds] Skipped {file}: {e.Message}"); }
                 }
+            AssignIds();
+            scannedSave = HighLogic.SaveFolder;
             Version++;
+            BuildsApi.RaiseLibraryChanged();
+        }
+
+        // Reads the library if it hasn't been read for this save yet (another mod may ask
+        // outside the editor).
+        public static void EnsureScanned()
+        {
+            if (Version == 0 || scannedSave != HighLogic.SaveFolder) Scan();
         }
 
         static IEnumerable<string> SafeFiles(string dir, string pattern, SearchOption option)
@@ -344,6 +364,73 @@ namespace PhilsBuilds
         public static string FolderFor(string facility, Category cat, string family) =>
             System.IO.Path.Combine(ShipsDir(facility), cat.Folder, Naming.Clean(family));
 
+        // ---- Stable ids ------------------------------------------------------------------
+
+        // Paths change (a family renamed, a craft filed, a launcher re-rated from Oak 030
+        // to Oak 060), so each design gets ids of its own, kept in the save's file and
+        // carried along by every move and rename here. New designs get theirs the first
+        // time they're seen; a new mark joins its line's id.
+        public static string KeyOf(CraftFile c) => "craft:" + NoteKey(c);
+        public static string KeyOf(SubFile s) => "sub:" + s.Name;
+        static string CraftKey(string facility, string relDir, string name) => "craft:" + NoteKey(facility, relDir, name);
+
+        static string LineKey(CraftFile c) => $"craft|{c.Facility}|{c.Category.Id}|{c.Family}";
+
+        static string LineKey(SubFile s)
+        {
+            string fam = string.IsNullOrEmpty(s.Family) ? s.Name : s.Family;
+            switch (s.Kind)
+            {
+                case SubKind.Launcher: return $"launcher|{fam}|{(s.Rated ? Naming.Code(s.Rating) : "")}";
+                case SubKind.UpperStage: return "upper|" + fam;
+                default: return "block|" + s.Name;
+            }
+        }
+
+        static string NewId() => Guid.NewGuid().ToString("N");
+
+        static void AssignIds()
+        {
+            bool changed = false;
+            var lines = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            List<CraftFile> craft = Craft.Where(c => c.Filed).ToList();
+            List<SubFile> subs = Subs.Where(s => s.Kind != SubKind.Unfiled).ToList();
+            foreach (CraftFile c in craft)
+                if (designIds.TryGetValue(KeyOf(c), out DesignIds known) && !lines.ContainsKey(LineKey(c))) lines[LineKey(c)] = known.Line;
+            foreach (SubFile s in subs)
+                if (designIds.TryGetValue(KeyOf(s), out DesignIds known) && !lines.ContainsKey(LineKey(s))) lines[LineKey(s)] = known.Line;
+
+            DesignIds Get(string key, string lineKey)
+            {
+                if (designIds.TryGetValue(key, out DesignIds found)) return found;
+                if (!lines.TryGetValue(lineKey, out string line)) lines[lineKey] = line = NewId();
+                changed = true;
+                return designIds[key] = new DesignIds { Id = NewId(), Line = line };
+            }
+
+            foreach (CraftFile c in craft)
+            {
+                DesignIds ids = Get(KeyOf(c), LineKey(c));
+                c.Id = ids.Id;
+                c.Line = ids.Line;
+            }
+            foreach (SubFile s in subs)
+            {
+                DesignIds ids = Get(KeyOf(s), LineKey(s));
+                s.Id = ids.Id;
+                s.Line = ids.Line;
+            }
+            if (changed) SaveStore();
+        }
+
+        static bool MoveIds(string from, string to)
+        {
+            if (string.Equals(from, to, StringComparison.OrdinalIgnoreCase) || !designIds.TryGetValue(from, out DesignIds ids)) return false;
+            designIds.Remove(from);
+            designIds[to] = ids;
+            return true;
+        }
+
         // ---- The save's own file -----------------------------------------------------
 
         static void LoadStore()
@@ -351,6 +438,7 @@ namespace PhilsBuilds
             subNodes.Clear();
             Notes.Clear();
             familyStyles.Clear();
+            designIds.Clear();
             if (!File.Exists(StorePath)) return;
             try
             {
@@ -371,6 +459,11 @@ namespace PhilsBuilds
                 foreach (ConfigNode f in n.GetNodes("FAMILY"))
                     if (Enum.TryParse(f.GetValue("style") ?? "", out MarkStyle st) && !string.IsNullOrEmpty(f.GetValue("name")))
                         familyStyles[f.GetValue("name")] = st;
+                foreach (ConfigNode d in n.GetNodes("DESIGN"))
+                {
+                    string key = d.GetValue("key"), id = d.GetValue("id"), line = d.GetValue("line");
+                    if (!string.IsNullOrEmpty(key) && !string.IsNullOrEmpty(id)) designIds[key] = new DesignIds { Id = id, Line = string.IsNullOrEmpty(line) ? id : line };
+                }
             }
             catch (Exception e)
             {
@@ -419,6 +512,13 @@ namespace PhilsBuilds
                     ConfigNode c = n.AddNode("FAMILY");
                     c.AddValue("name", kv.Key);
                     c.AddValue("style", kv.Value.ToString());
+                }
+                foreach (KeyValuePair<string, DesignIds> kv in designIds.OrderBy(x => x.Key, StringComparer.OrdinalIgnoreCase))
+                {
+                    ConfigNode c = n.AddNode("DESIGN");
+                    c.AddValue("key", kv.Key);
+                    c.AddValue("id", kv.Value.Id);
+                    c.AddValue("line", kv.Value.Line);
                 }
                 Directory.CreateDirectory(SaveDir);
                 root.Save(StorePath);
@@ -469,17 +569,19 @@ namespace PhilsBuilds
             try { if (File.Exists(oldThumb) && !File.Exists(newThumb)) File.Copy(oldThumb, newThumb); } catch { }
             RemoveCraftFiles(c.Path, oldThumb);
 
-            // Carry the save's note over to the new place.
+            // Carry the save's note and the design's ids over to the new place.
+            string fac = c.Facility;
+            string rel = System.IO.Path.GetDirectoryName(Full(dest)).Substring(Full(ShipsDir(fac)).Length).Trim('\\', '/').Replace('\\', '/');
+            bool moved = MoveIds(KeyOf(c), CraftKey(fac, rel, newName));
             CraftNote note = NoteFor(c);
             if (note != null)
             {
                 Notes.Remove(note.Key);
-                string fac = c.Facility;
-                string rel = System.IO.Path.GetDirectoryName(Full(dest)).Substring(Full(ShipsDir(fac)).Length).Trim('\\', '/').Replace('\\', '/');
                 note.Key = NoteKey(fac, rel, newName);
                 Notes[note.Key] = note;
-                SaveStore();
+                moved = true;
             }
+            if (moved) SaveStore();
             RemoveEmptyFolders(System.IO.Path.GetDirectoryName(c.Path), c.Facility);
             return dest;
         }
@@ -519,6 +621,7 @@ namespace PhilsBuilds
             string meta = System.IO.Path.ChangeExtension(c.Path, ".loadmeta");
             try { if (File.Exists(meta)) File.Delete(meta); } catch { }
             Notes.Remove(NoteKey(c));
+            designIds.Remove(KeyOf(c));
             SaveStore();
             RemoveEmptyFolders(System.IO.Path.GetDirectoryName(c.Path), c.Facility);
         }
@@ -532,6 +635,7 @@ namespace PhilsBuilds
             File.Move(s.Path, target);
             Subs.Remove(s);
             subNodes.Remove(s.Name);
+            designIds.Remove(KeyOf(s));
             SaveStore();
         }
 
@@ -553,6 +657,7 @@ namespace PhilsBuilds
             subNodes.Remove(s.Name);
             // Craft notes that name this launcher follow the rename.
             foreach (CraftNote n in Notes.Values.Where(n => Naming.SameName(n.Launcher, s.Name))) n.Launcher = newName;
+            MoveIds(KeyOf(s), "sub:" + newName);
             s.Name = newName;
             s.Path = Full(dest);
             SaveStore();

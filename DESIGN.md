@@ -132,7 +132,24 @@ Checks: `Tools/Test-Core.ps1` runs 67 checks on the naming rules; `Tools/Check-N
     Re-root tool does.
   - Phil isn't sure it's worth it. Banked until he's shared more thoughts.
 
-## Proposed: hooks for Phil's Reusability Suite (not agreed yet, nothing built)
+## Hooks for Phil's Reusability Suite (built 2026-11-07, not yet tried in game)
+
+Phil approved building them ("Yes, build them", in the suite's session). The code is in `src/Api.cs`.
+Where the build differs from the plan below:
+- `Saved.NewMark` became `IsNewFile`: true when the save wrote a new design file (a new design or a new
+  mark), false when it saved over one.
+- `PlaceHow` has a fourth value, `Copy`, for a hangar copy, and `Placed.CopyId` names the row picked.
+- `BuildsApi.RefreshWindow()` redraws the window when the hangar changes.
+- A New row picks up the design itself, as now, and fires `DesignPlaced` with `PickUp`. `ICopies.Build` is
+  only called for hangar rows. The Craft tab shows hangar rows only, no New row.
+- Designs are filed craft and filed subassemblies; unfiled ones aren't designs. Subassemblies have
+  Facility "". Launchers and upper stages carry the category ids "Launchers" and "UpperStages".
+- Filing a craft from the window's File… moves a file without the editor's parts, so it fires
+  `LibraryChanged` but not `DesignSaved`.
+- Pick-up now builds the parts itself (`CreateConstructFromTemplate`, then `SpawnConstruct`), as stock
+  does inside. Spent-stage names are set the moment the launcher is held, also on an empty editor, which
+  the old way missed.
+- Ids live in `PhilsBuilds.cfg` as `DESIGN { key, id, line }`.
 
 Phil's Reusability Suite is a separate career mod that requires Phil's Builds. Its design asks for six
 optional hooks. The rule: **Phil's Builds without the suite behaves exactly as now.** Every hook is

@@ -107,15 +107,22 @@ namespace PhilsBuilds
             catch (Exception ex) { Debug.LogError($"[PhilsBuilds] Merge failed: {ex}"); }
         }
 
-        // Puts a subassembly on the cursor, as clicking it in the stock list does.
-        public static bool PickUp(string path)
+        // Puts a subassembly on the cursor, as clicking it in the stock list does: drop
+        // whatever is held, build the parts from the file, hold them. Done here rather
+        // than through the stock list so `spawned` gets the parts, in file order.
+        public static bool PickUp(string path, Action<ShipConstruct> spawned)
         {
             if (Editor == null) return false;
             try
             {
                 ShipTemplate t = ShipConstruction.LoadTemplate(path);
                 if (t == null) return false;
-                Editor.OnPartListIconTap(t);
+                ShipConstruction.CreateConstructFromTemplate(t, sc =>
+                {
+                    if (sc == null || !Hold(sc)) return;
+                    try { spawned?.Invoke(sc); }
+                    catch (Exception ex) { Debug.LogError($"[PhilsBuilds] After picking up {path}: {ex}"); }
+                });
                 return true;
             }
             catch (Exception ex)
@@ -125,10 +132,28 @@ namespace PhilsBuilds
             }
         }
 
+        // Puts parts that already exist on the cursor (on an empty editor they become the craft).
+        public static bool Hold(ShipConstruct sc)
+        {
+            if (Editor == null || sc?.parts == null || sc.parts.Count == 0) return false;
+            try
+            {
+                Editor.OnPartListBackgroundTap();
+                Editor.SpawnConstruct(sc);
+                return true;
+            }
+            catch (Exception ex)
+            {
+                Debug.LogError($"[PhilsBuilds] Couldn't hold {sc.shipName}: {ex}");
+                return false;
+            }
+        }
+
         // Saves the held part and everything under it as a subassembly. This is what
         // the stock drop zone does (stage numbers taken relative to the craft's root
         // part), without the stock list's own steps, which fail while it's hidden.
-        public static bool SaveSubassembly(string name, string description, Part root)
+        // Gives back the parts in the order written, or null if it failed.
+        public static System.Collections.Generic.List<Part> SaveSubassembly(string name, string description, Part root)
         {
             try
             {
@@ -148,12 +173,12 @@ namespace PhilsBuilds
                 }
                 if (sc.vesselDeltaV != null) UnityEngine.Object.Destroy(sc.vesselDeltaV.gameObject);
                 try { EditorPartList.Instance?.RefreshSubassemblies(); } catch { }
-                return true;
+                return new System.Collections.Generic.List<Part>(sc.parts);
             }
             catch (Exception ex)
             {
                 Debug.LogError($"[PhilsBuilds] Couldn't save subassembly {name}: {ex}");
-                return false;
+                return null;
             }
         }
 

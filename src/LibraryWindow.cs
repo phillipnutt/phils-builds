@@ -21,7 +21,7 @@ namespace PhilsBuilds
         const string LockId = "PhilsBuildsWindow", TypingLockId = "PhilsBuildsTyping";
         const ControlTypes WindowLock = ControlTypes.EDITOR_PAD_PICK_PLACE | ControlTypes.EDITOR_PAD_PICK_COPY |
             ControlTypes.EDITOR_GIZMO_TOOLS | ControlTypes.EDITOR_ROOT_REFLOW | ControlTypes.CAMERACONTROLS;
-        const string AllKey = null, UnfiledKey = "~unfiled", UpperKey = "~upper", UnratedKey = "~unrated";
+        const string AllKey = null, UnfiledKey = "~unfiled", UpperKey = "~upper", UnratedKey = "~unrated", CopiesKey = "~copies";
 
         // Kept for the session, so the window opens the way it was left.
         static Vector2? savedPosition;
@@ -32,6 +32,7 @@ namespace PhilsBuilds
         static bool fitOnly = true;
         static readonly HashSet<string> collapsed = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         static string selectedCraftPath, selectedSubPath;
+        static string selectedCopyKey;      // a hangar copy picked under the selected design
 
         readonly BuildsEditor host;
         readonly List<Btn> buttons = new List<Btn>();
@@ -201,6 +202,8 @@ namespace PhilsBuilds
         {
             if (root == null) return;
             builtVersion = Library.Version;
+            copyCache.Clear();
+            noteCache.Clear();
             buttons.RemoveAll(b => b.Rt == null || !b.Rt.IsChildOf(root) || b.Rt.IsChildOf(rail) || b.Rt.IsChildOf(mid) || b.Rt.IsChildOf(detail));
             fields.Clear();
             Kit.Clear(rail);
@@ -241,6 +244,11 @@ namespace PhilsBuilds
             Ui.Slab(rail, "Bg", 1, 0, RailW - 1, H - TitleH - 1, Look.Rail, 9, Ui.Corners.BottomLeft);
             Ui.Solid(Ui.Node(rail, "Line").At(RailW - 1, 0, 1, H - TitleH - 1), Look.Line);
             railY = 6;
+            if (!Hangar)
+            {
+                if (craftFilter == CopiesKey) craftFilter = AllKey;
+                if (launcherFilter == CopiesKey) launcherFilter = AllKey;
+            }
             if (tab == Tab.Craft) CraftRail();
             else if (tab == Tab.Launchers) LauncherRail();
             else SubRail();
@@ -253,7 +261,7 @@ namespace PhilsBuilds
             railY += 15;
         }
 
-        void RailItem(string label, string sub, int count, bool on, Action pick, float h = 22, bool warn = false, bool bold = false)
+        void RailItem(string label, string sub, int count, bool on, Action pick, float h = 22, bool warn = false, bool bold = false, bool good = false)
         {
             bool empty = count == 0 && !on;
             Btn b = Track(Btn.Make(rail, label, 8, railY, RailW - 16, h, empty ? (Action)null : () => Later(pick))
@@ -270,11 +278,12 @@ namespace PhilsBuilds
                 RectTransform badge = Ui.Node(b.Rt, "Count");
                 badge.anchorMin = badge.anchorMax = badge.pivot = new Vector2(1, 0.5f);
                 badge.anchoredPosition = new Vector2(-6, 0);
-                Text t = Ui.Label(Ui.Node(badge, "N").Stretch(), count.ToString(), Look.Display, 11, on ? Look.AmberInk : warn ? Look.Warn : Look.Ink,
+                Text t = Ui.Label(Ui.Node(badge, "N").Stretch(), count.ToString(), Look.Display, 11, on ? Look.AmberInk : warn ? Look.Warn : good ? Look.Good : Look.Ink,
                     TextAnchor.MiddleCenter, FontStyle.Bold);
                 t.horizontalOverflow = HorizontalWrapMode.Overflow;
                 badge.sizeDelta = new Vector2(Mathf.Max(18, t.preferredWidth + 10), 16);
                 Ui.Box(badge, on ? Look.Round(Look.Amber, Look.Amber, 8) : warn ? Look.Round(Color.Lerp(Look.Rail, Look.Warn, 0.18f), Look.Fade(Look.Warn, 0.3f), 8)
+                                 : good ? Look.Round(Color.Lerp(Look.Rail, Look.Good, 0.18f), Look.Fade(Look.Good, 0.3f), 8)
                                  : Look.Round(Look.Panel3, Look.Line2, 8));
                 badge.SetAsFirstSibling();
                 badge.SetAsLastSibling();
@@ -301,6 +310,9 @@ namespace PhilsBuilds
             railY += 5;
             int unfiled = Library.Craft.Count(c => !c.Filed);
             RailItem("Unfiled", null, unfiled, craftFilter == UnfiledKey, () => { craftFilter = UnfiledKey; Reselect(); RebuildAll(); }, warn: unfiled > 0);
+            if (Hangar)
+                RailItem("With hangar copies", null, Library.Families.Count(InHangar), craftFilter == CopiesKey,
+                    () => { craftFilter = CopiesKey; Reselect(); RebuildAll(); }, good: true);
         }
 
         void LauncherRail()
@@ -319,6 +331,12 @@ namespace PhilsBuilds
             RailHead("Other stages");
             RailItem("Upper stages & tugs", null, Library.Subs.Count(s => s.Kind == SubKind.UpperStage), launcherFilter == UpperKey,
                 () => { launcherFilter = UpperKey; RebuildAll(); }, 26);
+            if (Hangar)
+            {
+                RailHead("Hangar");
+                RailItem("With flown copies", null, Library.Subs.Count(s => IsStage(s) && InHangar(s.Path)), launcherFilter == CopiesKey,
+                    () => { launcherFilter = CopiesKey; RebuildAll(); }, 26, good: true);
+            }
             Kit.Text(rail, 16, H - TitleH - 76, RailW - 30, 64,
                 "Classes come from the rating you type in, so a launcher moves class when you re-rate it.", 12, Look.Ink2,
                 align: TextAnchor.LowerLeft);
@@ -358,7 +376,11 @@ namespace PhilsBuilds
         }
 
         bool CraftInView(CraftFile c) =>
-            craftFilter == AllKey ? true : craftFilter == UnfiledKey ? !c.Filed : c.Category != null && c.Category.Id == craftFilter;
+            craftFilter == AllKey ? true : craftFilter == UnfiledKey ? !c.Filed
+            : craftFilter == CopiesKey ? c.Filed && Library.FamilyOf(c) is Family f && InHangar(f)
+            : c.Category != null && c.Category.Id == craftFilter;
+
+        static bool IsStage(SubFile s) => s.Kind == SubKind.Launcher || s.Kind == SubKind.UpperStage;
 
         // ---- The middle column ---------------------------------------------------------------
 
@@ -405,7 +427,8 @@ namespace PhilsBuilds
         {
             List<CraftFile> shown = Library.Craft.Where(CraftInView).ToList();
             int families = shown.Where(c => c.Filed).Select(c => c.Facility + c.Category.Id + c.Family).Distinct(StringComparer.OrdinalIgnoreCase).Count();
-            string title = craftFilter == AllKey ? "All craft" : craftFilter == UnfiledKey ? "Unfiled" : Category.ById(craftFilter)?.Label ?? "";
+            string title = craftFilter == AllKey ? "All craft" : craftFilter == UnfiledKey ? "Unfiled" : craftFilter == CopiesKey ? "With hangar copies"
+                : Category.ById(craftFilter)?.Label ?? "";
             string eyebrow = craftFilter == UnfiledKey ? $"{shown.Count} craft not in a family yet"
                 : $"{shown.Count} craft · {families} famil{(families == 1 ? "y" : "ies")}";
             Kit.Eyebrow(mid, 16, 14, MidW - 230, eyebrow);
@@ -459,7 +482,7 @@ namespace PhilsBuilds
                 return;
             }
 
-            IEnumerable<Family> fams = Library.Families.Where(f => craftFilter == AllKey || f.Category.Id == craftFilter);
+            IEnumerable<Family> fams = Library.Families.Where(f => craftFilter == AllKey || (craftFilter == CopiesKey ? InHangar(f) : f.Category.Id == craftFilter));
             if (q.Length > 0) fams = fams.Where(f => Has(f.Name, q));
             List<Family> families = SortFamilies(fams).ToList();
             if (families.Count == 0)
@@ -502,7 +525,12 @@ namespace PhilsBuilds
         // One family, one row: its picture, name and numbers, and its marks on the right.
         float FamilyRow(RectTransform content, Family f, float x, float y, float w)
         {
-            const float h = 60;
+            // Hangar copies of any mark go under the family's own row.
+            var copies = new List<(string, CopyRow, string)>();
+            foreach (CraftFile m in f.Marks)
+                foreach (CopyRow r in RowsFor(m.Path).Where(x => !x.IsNew))
+                    copies.Add((m.Path, r, f.Marks.Count > 1 && m.Mark > 0 ? Marks.Short(m.Style, m.Mark) : null));
+            float h = 60 + copies.Count * CopyH;
             CraftFile sel = SelCraft;
             bool selected = sel != null && f.Marks.Contains(sel);
             CraftFile newest = f.Newest;
@@ -510,6 +538,7 @@ namespace PhilsBuilds
                 selected ? Look.Amber : Look.Line, 9);
             Kit.Clicks(row, n => Later(() =>
             {
+                selectedCopyKey = null;
                 if (n >= 2) { selectedCraftPath = newest.Path; host.LoadCraft(newest, false); return; }
                 selectedCraftPath = (selected ? sel : newest).Path;
                 confirmDelete = confirmLoad = false;
@@ -521,10 +550,12 @@ namespace PhilsBuilds
             Library.LoadStats(newest);
             CraftNote note = Library.NoteFor(newest);
             var bits = new List<string>();
-            if (craftFilter == AllKey) bits.Add(f.Category.Label);
+            if (craftFilter == AllKey || craftFilter == CopiesKey) bits.Add(f.Category.Label);
             if (newest.Mass > 0) bits.Add(Naming.Tons(note != null && note.Payload > 0 ? note.Payload : newest.Mass));
             if (note != null && note.Launcher.Length > 0) bits.Add("on " + note.Launcher);
             if (f.Facility == "SPH") bits.Add("SPH");
+            string hangarNote = NoteFor(newest.Path);
+            if (!string.IsNullOrEmpty(hangarNote)) bits.Add($"<color={Look.Html(Look.Good)}>{hangarNote}</color>");
 
             // Mark buttons, newest on the right; the five newest are shown.
             List<CraftFile> marks = f.Marks.Skip(Math.Max(0, f.Marks.Count - 5)).ToList();
@@ -536,15 +567,18 @@ namespace PhilsBuilds
             {
                 CraftFile pick = c;
                 string label = c.Mark > 0 ? Marks.Short(c.Style, c.Mark) : "—";
-                MarkChip(row, mx, 18, label, c != newest, sel == c, () => Later(() =>
+                MarkChip(row, mx, 18, label, c != newest, sel == c && selectedCopyKey == null, () => Later(() =>
                 {
                     selectedCraftPath = pick.Path;
+                    selectedCopyKey = null;
                     confirmDelete = confirmLoad = false;
                     RebuildList();
                     RebuildDetail();
                 }));
                 mx += 36;
             }
+            for (int i = 0; i < copies.Count; i++)
+                CopyRowUi(row, 60 + i * CopyH, w, copies[i].Item1, copies[i].Item2, copies[i].Item3, true);
             return y + h;
         }
         void MarkChip(RectTransform parent, float x, float y, string label, bool old, bool selected, Action click, bool small = false)
@@ -646,6 +680,15 @@ namespace PhilsBuilds
         {
             float w = scroller.Width - 32, y = 12;
             RectTransform content = scroller.Content;
+            if (launcherFilter == CopiesKey)
+            {
+                List<SubFile> withCopies = Library.Subs.Where(s => IsStage(s) && InHangar(s.Path))
+                    .OrderBy(s => s.Kind).ThenBy(s => s.Rated ? s.Rating : float.MaxValue).ThenBy(s => s.Name).ToList();
+                if (withCopies.Count == 0) Empty(content, "Nothing in the hangar", "Flown copies show here once they come home.");
+                foreach (SubFile s in withCopies) y = LauncherRow(content, s, 16, y, w, false, false) + 7;
+                scroller.SetHeight(y + 8);
+                return;
+            }
             if (launcherFilter == UpperKey)
             {
                 List<SubFile> stages = Library.Subs.Where(s => s.Kind == SubKind.UpperStage).OrderBy(s => s.Name).ToList();
@@ -686,11 +729,14 @@ namespace PhilsBuilds
         float LauncherRow(RectTransform content, SubFile s, float x, float y, float w, bool best, bool dim)
         {
             Library.LoadStats(s);
+            IList<CopyRow> copies = dim ? NoRows : RowsFor(s.Path);
             bool selected = SelSub == s;
-            RectTransform row = Kit.Panel(content, s.Name, x, y, w, 58, selected ? Look.Wash(Look.Rail, 0.08f) : Look.Rail, selected ? Look.Amber : Look.Line, 8);
+            float h = 58 + copies.Count * CopyH;
+            RectTransform row = Kit.Panel(content, s.Name, x, y, w, h, selected ? Look.Wash(Look.Rail, 0.08f) : Look.Rail, selected ? Look.Amber : Look.Line, 8);
             Kit.Clicks(row, n => Later(() =>
             {
                 selectedSubPath = s.Path;
+                selectedCopyKey = null;
                 confirmDelete = false;
                 if (n >= 2) { host.PickUp(s); return; }
                 RebuildList();
@@ -717,6 +763,8 @@ namespace PhilsBuilds
                 : $"Up to {Naming.Meters(s.Width)} wide. This payload is {Naming.Meters(payloadWidth)}.";
             else sub = $"Lifts {Naming.Tons(s.Rating)}{(s.Width > 0 ? " · up to " + Naming.Meters(s.Width) : "")}" +
                        $"{(s.Stages > 0 ? $" · {s.Stages} stage{(s.Stages == 1 ? "" : "s")}" : "")}{(s.Cost > 0 ? " · " + Naming.Funds(s.Cost) : "")}";
+            string hangarNote = dim ? null : NoteFor(s.Path);
+            if (!string.IsNullOrEmpty(hangarNote)) sub += $" · <color={Look.Html(Look.Good)}>{hangarNote}</color>";
             Kit.Line(row, 64, 30, textW + 60, 18, sub, 12, ink2);
 
             if (s.Rated && payloadKnown && !dim)
@@ -728,8 +776,145 @@ namespace PhilsBuilds
                     12, Look.Ink2, Look.Display, TextAnchor.MiddleRight);
             }
             else if (!s.Rated && s.Kind == SubKind.Launcher)
-                Track(Kit.Ghost(row, "Rate it", w - 12 - 76, 14, 76, 30, () => Later(() => { selectedSubPath = s.Path; RebuildList(); RebuildDetail(); })));
-            return y + 58;
+                Track(Kit.Ghost(row, "Rate it", w - 12 - 76, 14, 76, 30, () => Later(() => { selectedSubPath = s.Path; selectedCopyKey = null; RebuildList(); RebuildDetail(); })));
+            for (int i = 0; i < copies.Count; i++) CopyRowUi(row, 58 + i * CopyH, w, s.Path, copies[i], null, false);
+            return y + h;
+        }
+
+        // ---- Hangar copies (only drawn once another mod registers them) ----------------------
+
+        const float CopyH = 34;
+        static readonly IList<CopyRow> NoRows = new CopyRow[0];
+        readonly Dictionary<string, IList<CopyRow>> copyCache = new Dictionary<string, IList<CopyRow>>(StringComparer.OrdinalIgnoreCase);
+        readonly Dictionary<string, string> noteCache = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+
+        static bool Hangar => BuildsApi.Copies != null;
+
+        IList<CopyRow> RowsFor(string path)
+        {
+            if (!Hangar || string.IsNullOrEmpty(path)) return NoRows;
+            if (!copyCache.TryGetValue(path, out IList<CopyRow> rows)) copyCache[path] = rows = BuildsApi.CopiesOf(BuildsApi.OfFile(path));
+            return rows;
+        }
+
+        string NoteFor(string path)
+        {
+            if (!Hangar || string.IsNullOrEmpty(path)) return null;
+            if (!noteCache.TryGetValue(path, out string note)) noteCache[path] = note = BuildsApi.NoteOf(BuildsApi.OfFile(path));
+            return note;
+        }
+
+        bool InHangar(string path) => RowsFor(path).Any(r => !r.IsNew);
+        bool InHangar(Family f) => f.Marks.Any(m => InHangar(m.Path));
+        static string RowKey(CopyRow r) => r.IsNew ? "~new" : "#" + r.Id;
+        CopyRow SelCopy(string path) => selectedCopyKey == null ? null : RowsFor(path).FirstOrDefault(r => RowKey(r) == selectedCopyKey);
+
+        // One copy under a design's row: its number, what it is, and its price.
+        void CopyRowUi(RectTransform box, float y, float w, string path, CopyRow r, string prefix, bool craftTab)
+        {
+            bool on = selectedCopyKey == RowKey(r) && string.Equals(craftTab ? selectedCraftPath : selectedSubPath, path, StringComparison.OrdinalIgnoreCase);
+            RectTransform row = Ui.Node(box, "Copy " + r.Label).At(1, y, w - 2, CopyH);
+            Ui.Solid(row, on ? Color.Lerp(Look.Rail, Look.Good, 0.10f) : Color.clear, raycast: true);
+            Ui.Solid(Ui.Node(row, "Line").At(0, 0, w - 2, 1), Look.Line);
+            if (on) Ui.Solid(Ui.Node(row, "Bar").At(0, 1, 3, CopyH - 1), Look.Good);
+            Kit.Clicks(row, n => Later(() =>
+            {
+                if (craftTab) selectedCraftPath = path;
+                else selectedSubPath = path;
+                selectedCopyKey = RowKey(r);
+                confirmDelete = confirmLoad = false;
+                if (n >= 2 && !r.Reserved) { host.PickUpCopy(BuildsApi.OfFile(path), r); return; }
+                RebuildList();
+                RebuildDetail();
+            }));
+            Color ink = r.Reserved ? Look.Fade(Look.Ink, 0.45f) : Look.Ink, ink2 = r.Reserved ? Look.Fade(Look.Ink2, 0.55f) : Look.Ink2;
+            Kit.Line(row, 64, 0, 40, CopyH, r.Label, 13, ink, style: FontStyle.Bold);
+            string text = r.Reserved && r.ReservedText.Length > 0 ? r.ReservedText : r.Text;
+            if (!string.IsNullOrEmpty(prefix)) text = text.Length > 0 ? prefix + " · " + text : prefix;
+            if (!r.Reserved && r.Warning.Length > 0) text += $"{(text.Length > 0 ? " · " : "")}<color={Look.Html(Look.Warn)}>{r.Warning}</color>";
+            Kit.Line(row, 104, 0, w - 104 - 150, CopyH, text, 12, ink2);
+            Kit.Line(row, w - 12 - 136, 0, 132, CopyH, r.Price, 13, ink, Look.Display, TextAnchor.MiddleRight);
+        }
+
+        // The side panel for a picked copy, filled in by the mod that keeps the hangar.
+        void CopyPanel(Design d, CopyRow r)
+        {
+            CopyDetail det = BuildsApi.DetailOf(d, r) ?? new CopyDetail();
+            float y = 14;
+            Kit.Eyebrow(detail, DX, y, DW, Or(det.Eyebrow, r.IsNew ? $"{d.Name} · new" : $"Hangar copy · {d.Name}"));
+            Text title = Kit.Text(detail, DX, y + 14, DW, 52, Or(det.Title, r.IsNew ? $"{d.Name}, new" : $"{d.Name} {r.Label}"), 22, Look.Ink, Look.Display,
+                TextAnchor.UpperLeft, FontStyle.Bold);
+            float th = Mathf.Min(52, title.preferredHeight + 2);
+            title.rectTransform.At(DX, y + 14, DW, th);
+            y += 18 + th + 2;
+
+            // Chips, wrapping onto a second line if they need to.
+            float px = DX;
+            bool anyChip = false;
+            foreach (CopyChip c in (det.Chips ?? new List<CopyChip>()).Where(c => c != null && !string.IsNullOrEmpty(c.Text)))
+            {
+                RectTransform chip = ToneChip(detail, c.Text, c.Tone, out float cw);
+                if (px > DX && px + cw > DX + DW) { px = DX; y += 28; }
+                chip.At(px, y, cw, 22);
+                px += cw + 6;
+                anyChip = true;
+            }
+            if (anyChip) y += 32;
+
+            List<CopyLine> lines = (det.Lines ?? new List<CopyLine>()).Where(l => l != null).ToList();
+            bool total = !string.IsNullOrEmpty(det.Total);
+            if (lines.Count > 0 || total)
+            {
+                float bh = 8 + lines.Count * 20 + (total ? (lines.Count > 0 ? 11 : 0) + 22 : 0) + 8;
+                RectTransform box = Kit.Panel(detail, "Cost", DX, y, DW, bh, Look.Panel2, Look.Line, 8);
+                float ly = 8;
+                foreach (CopyLine l in lines)
+                {
+                    Kit.Line(box, 10, ly, DW - 20 - 110, 20, l.Label ?? "", 12, Look.Ink2);
+                    Kit.Line(box, DW - 10 - 120, ly, 120, 20, l.Value ?? "", 14, l.Good ? Look.Good : Look.Ink, Look.Display, TextAnchor.MiddleRight, FontStyle.Bold);
+                    ly += 20;
+                }
+                if (total)
+                {
+                    if (lines.Count > 0) { Kit.Rule(box, 10, ly + 5, DW - 20, 1); ly += 11; }
+                    Kit.Line(box, 10, ly, DW - 20 - 130, 22, Or(det.TotalLabel, "Total"), 12, Look.Ink2);
+                    Kit.Line(box, DW - 10 - 150, ly, 150, 22, det.Total, 14, Look.Ink, Look.Display, TextAnchor.MiddleRight, FontStyle.Bold);
+                }
+                y += bh + 10;
+            }
+
+            float bottom = H - TitleH - 14;
+            string hint = Or(det.Hint, r.Reserved ? r.ReservedText : "");
+            float by = bottom - 40 - (hint.Length > 0 ? 38 : 0);
+            List<string> log = (det.Log ?? new List<string>()).Where(s => !string.IsNullOrEmpty(s)).ToList();
+            if (log.Count > 0)
+            {
+                if (!string.IsNullOrEmpty(det.LogTitle))
+                {
+                    Kit.Line(detail, DX, y, DW, 14, det.LogTitle.ToUpperInvariant(), 10, Look.Ink3);
+                    y += 16;
+                }
+                Text lt = Kit.Text(detail, DX, y, DW, Mathf.Max(0, by - 8 - y), string.Join("\n", log.ToArray()), 12, Look.Ink2, align: TextAnchor.UpperLeft);
+                lt.verticalOverflow = VerticalWrapMode.Truncate;
+            }
+
+            Btn pick = Track(Kit.Primary(detail, "Pick up", DX, by, DW, 40, r.Reserved ? (Action)null : () => Later(() => host.PickUpCopy(d, r)), 16));
+            if (r.Reserved) { pick.Enabled = false; pick.Refresh(); }
+            if (hint.Length > 0) Kit.Text(detail, DX, by + 44, DW, 34, hint, 12, Look.Ink2, align: TextAnchor.UpperCenter);
+        }
+
+        static string Or(string s, string fallback) => string.IsNullOrEmpty(s) ? fallback : s;
+
+        static RectTransform ToneChip(RectTransform parent, string s, ChipTone tone, out float w)
+        {
+            Color ink = tone == ChipTone.Good ? Look.Good : tone == ChipTone.Warn ? Look.Warn : Look.Ink2;
+            RectTransform rt = Ui.Node(parent, "Chip");
+            Text t = Ui.Label(Ui.Node(rt, "Text").Stretch(9, 0, 9, 0), s, Look.Body, 12, ink, TextAnchor.MiddleCenter);
+            t.horizontalOverflow = HorizontalWrapMode.Overflow;
+            w = Mathf.Min(DW, Mathf.Ceil(t.preferredWidth) + 18);
+            Ui.Box(rt, tone == ChipTone.Plain ? Look.Round(Look.Panel3, Look.Line2, 11)
+                : Look.Round(Color.Lerp(Look.Rail, ink, 0.13f), Color.Lerp(Look.Rail, ink, 0.45f), 11));
+            return rt;
         }
 
         // ---- Subassemblies ---------------------------------------------------------------------
@@ -853,6 +1038,7 @@ namespace PhilsBuilds
             {
                 CraftFile c = SelCraft;
                 if (c == null) DetailHint("Pick a craft", "Its picture, numbers and buttons show here.");
+                else if (SelCopy(c.Path) is CopyRow r && BuildsApi.OfFile(c.Path) is Design d) CopyPanel(d, r);
                 else CraftDetail(c);
             }
             else
@@ -861,7 +1047,11 @@ namespace PhilsBuilds
                 bool inTab = s != null && (tab == Tab.Launchers ? s.Kind == SubKind.Launcher || s.Kind == SubKind.UpperStage
                                                                : s.Kind != SubKind.Launcher && s.Kind != SubKind.UpperStage);
                 if (!inTab) DetailHint(tab == Tab.Launchers ? "Pick a launcher" : "Pick a subassembly", "Pick it up from here to attach it, like any subassembly.");
-                else if (s.Kind == SubKind.Launcher || s.Kind == SubKind.UpperStage) LauncherDetail(s);
+                else if (s.Kind == SubKind.Launcher || s.Kind == SubKind.UpperStage)
+                {
+                    if (SelCopy(s.Path) is CopyRow r && BuildsApi.OfFile(s.Path) is Design d) CopyPanel(d, r);
+                    else LauncherDetail(s);
+                }
                 else SubDetail(s);
             }
         }
@@ -1093,6 +1283,7 @@ namespace PhilsBuilds
         {
             if (c == null) return;
             selectedCraftPath = c.Path;
+            selectedCopyKey = null;
             if (c.Filed) collapsed.Remove(c.Facility + "|" + c.Category.Id + "|" + c.Family);
             craftFilter = c.Filed ? c.Category.Id : UnfiledKey;
             tab = Tab.Craft;
@@ -1102,6 +1293,7 @@ namespace PhilsBuilds
         {
             if (s == null) return;
             selectedSubPath = s.Path;
+            selectedCopyKey = null;
             tab = s.Kind == SubKind.Launcher || s.Kind == SubKind.UpperStage ? Tab.Launchers : Tab.Subs;
             if (tab == Tab.Subs) subFilter = AllKey;
             if (tab == Tab.Launchers && launcherFilter != AllKey) launcherFilter = AllKey;
