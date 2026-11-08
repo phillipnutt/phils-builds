@@ -469,7 +469,7 @@ namespace PhilsBuilds
             previewName.text = final.Length > 0 ? final : "—";
             string launcher = filing == null ? LauncherTags.LauncherIn(Stock.Ship) : Library.NoteFor(filing)?.Launcher;
             previewWhere.text = $"{cat.Label}, {(FamilyName.Length > 0 ? FamilyName : "…")} family" +
-                                (string.IsNullOrEmpty(launcher) ? "" : $" · built on {launcher} (found by itself)");
+                                (string.IsNullOrEmpty(launcher) ? "" : $" · built on {launcher} " + (Library.HasLauncher(launcher) ? "(found by itself)" : "(deleted)"));
             string rel = FamilyName.Length == 0 ? "" : $"Ships/{Facility}/{cat.Folder}/{Naming.Clean(FamilyName)}/{final}.craft";
             previewPath.text = rel;
             string p = Problem();

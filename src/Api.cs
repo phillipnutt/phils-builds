@@ -290,6 +290,8 @@ namespace PhilsBuilds
             Raise(DesignPlaced, new Placed { Design = d, How = how, Parts = parts.ToList().AsReadOnly(), CopyId = copyId ?? "" }, "DesignPlaced");
         }
 
+        internal static bool HasSavedListeners => DesignSaved != null;
+
         internal static void RaiseSaved(Design d, bool isNewFile, IEnumerable<Part> parts)
         {
             if (d == null || parts == null) return;

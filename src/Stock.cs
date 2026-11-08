@@ -111,6 +111,47 @@ namespace PhilsBuilds
             catch (Exception ex) { Debug.LogError($"[PhilsBuilds] Load failed: {ex}"); }
         }
 
+        // The building's floor height (KSP keeps it as the bottom of the space parts can go in).
+        public static float Floor => EditorBounds.Instance != null ? EditorBounds.Instance.constructionBounds.min.y : 0f;
+
+        // A subassembly's parts sit where the cursor held them when it was saved, often
+        // partly under the floor. Loaded as the craft, it's lifted so its lowest point is
+        // on the floor. Launch clamps don't count: in the editor their towers stretch down
+        // to the floor by themselves every frame (and haven't yet, just after a load).
+        // Returns how far it went up.
+        public static float LiftOffFloor(ShipConstruct ship)
+        {
+            if (ship?.parts == null || ship.parts.Count == 0) return 0;
+            try
+            {
+                // In the editor a part hangs from its parent's transform, so the tops of the
+                // part trees (normally just the root) hold every part's models, and move them all.
+                var tops = ship.parts.Where(p => p.transform.parent == null || p.transform.parent.GetComponentInParent<Part>() == null).ToList();
+                var clamp = new System.Collections.Generic.Dictionary<Part, bool>();
+                float low = float.MaxValue;
+                foreach (Part top in tops)
+                    foreach (Renderer r in top.GetComponentsInChildren<Renderer>())
+                    {
+                        if (!r.enabled || !r.gameObject.activeInHierarchy) continue;
+                        if (!(r is MeshRenderer || r is SkinnedMeshRenderer)) continue;    // the part's own model, not effects
+                        Part owner = r.GetComponentInParent<Part>();
+                        if (owner == null) continue;
+                        if (!clamp.TryGetValue(owner, out bool isClamp)) clamp[owner] = isClamp = owner.FindModuleImplementing<LaunchClamp>() != null;
+                        if (!isClamp) low = Math.Min(low, r.bounds.min.y);
+                    }
+                if (low == float.MaxValue) return 0;
+                float lift = Floor - low;
+                if (lift <= 0.01f) return 0;
+                foreach (Part p in tops) p.transform.position += Vector3.up * lift;
+                return lift;
+            }
+            catch (Exception ex)
+            {
+                Debug.LogWarning($"[PhilsBuilds] Couldn't lift the craft off the floor: {ex.Message}");
+                return 0;
+            }
+        }
+
         public static void Merge(string path)
         {
             Find();
@@ -165,7 +206,15 @@ namespace PhilsBuilds
         // the stock drop zone does (stage numbers taken relative to the craft's root
         // part), without the stock list's own steps, which fail while it's hidden.
         // Gives back the parts in the order written, or null if it failed.
-        public static System.Collections.Generic.List<Part> SaveSubassembly(string name, string description, Part root)
+        // The editor's latest undo step, taken again from the craft as it is now (after
+        // changes made just after a load, so undo doesn't bring back the craft as loaded).
+        public static void RetakeUndoStep()
+        {
+            try { Editor?.ResetBackup(); }
+            catch (Exception ex) { Debug.LogWarning($"[PhilsBuilds] Couldn't update the undo step: {ex.Message}"); }
+        }
+
+        public static System.Collections.Generic.List<Part> SaveSubassembly(string name, string description, Part root, bool picture = true)
         {
             try
             {
@@ -183,7 +232,7 @@ namespace PhilsBuilds
                 {
                     foreach (var kv in stages) if (kv.Key != null) kv.Key.inverseStage = kv.Value;
                 }
-                Thumbs.Take(sc, name);
+                if (picture) Thumbs.Take(sc, name);
                 if (sc.vesselDeltaV != null) UnityEngine.Object.Destroy(sc.vesselDeltaV.gameObject);
                 try { EditorPartList.Instance?.RefreshSubassemblies(); } catch { }
                 return new System.Collections.Generic.List<Part>(sc.parts);

@@ -167,6 +167,36 @@ Phil let both sessions build overnight without his sign-off ("Build freely"), so
   like "SINCE MARK I: +2.3 t · +1,200 funds · +3 parts · +1 stage", so a family reads like PIP's
   iterations. Figures that didn't change are left out, and the line is hidden if none did.
 
+## Fixed after Phil's play-test 2 (2026-11-08, tested in game: 127 checks, 0 failures)
+
+Found by Phil with Argo I, Haytor 002 and Rockall 002; written up by the suite's session.
+- **Load put a launcher underground.** A subassembly file keeps the parts where the cursor held them when
+  it was saved: Haytor 002's root sat at 4.5 m with the rest hanging below the floor. KSP's editor load
+  doesn't move a craft. After Load, Phil's Builds lifts the parts so the lowest model point is on the floor
+  (the bottom of KSP's `EditorBounds.constructionBounds`: 0 m in the VAB), and redoes KSP's undo step
+  (`ResetBackup`) so undo doesn't sink it again or lose the stage names. It only lifts, never lowers.
+  Launch clamps don't count: in the editor `LaunchClamp.Update` stretches each tower down to y = 0 every
+  frame, and just after a load they haven't stretched yet (the first in-game test failed on that).
+- **A deleted launcher's stage names stayed on its parts.** Phil deleted Haytor 002 (07:35), then saved
+  its reworked parts as Rockall 002 (07:37). With Haytor gone, "Haytor 002 Stage 2" no longer looked like
+  a name this mod writes, so it wasn't stripped. Now:
+  - Saving a launcher or upper stage strips any stage-shaped name at a stage's priority, whichever
+    launcher wrote it (the parts get fresh names whenever it's picked up or loaded anyway).
+  - The parts just saved as a launcher get its stage names at once. If they're the whole craft, and the
+    craft is still named after a launcher (or not named), it takes the new launcher's name.
+  - The library remembers launchers that were renamed or deleted (`FORMER_LAUNCHER` in PhilsBuilds.cfg).
+    Their stage names still count as this mod's, so a craft built on one keeps relabelling as it's edited.
+    A renamed launcher's stage names follow its new name.
+- **"Built on" named a deleted launcher.** The note is kept (it's still what the craft was built on), and
+  shown as "Haytor 002 · deleted", greyed, in the craft's panel, its row and the Save panel.
+- **Saved launcher files kept the old design id.** `DesignSaved` fires after the file is written, so the
+  suite's stamps reached only the live parts. A subassembly save now writes the file a second time after
+  `DesignSaved` (only when something listens), from the same parts in the same order. The suite says craft
+  files don't need this: it never trusts design ids in a file, and re-stamps on every placement.
+- **Not built yet: saving over a launcher** (needs Phil's OK on a mockup). The Save button with a lone
+  launcher open would ask "Save over Rockall 002" or "Save as Rockall 002 II", like a craft's marks. The
+  Save panel's "What is it?" list would get Launcher and Upper stage, with the rating there.
+
 ## Banked ideas (Phil's play-test thoughts, not decided)
 
 - **Merge holds a craft by its root part** (2026-11-06). A saved capsule with a heat shield below and a

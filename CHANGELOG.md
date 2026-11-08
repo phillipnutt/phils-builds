@@ -18,6 +18,16 @@
 - Launchers and subassemblies have pictures in the library, taken when they're saved from the drop box,
   or the first time an older one is picked up or loaded.
 - A craft's panel shows what changed since the mark before it ("+2.3 t · +1,200 funds · +3 parts").
+- Fixed: a loaded launcher or upper stage could sit mostly under the VAB floor. It's lifted so its lowest
+  point is on the floor, and undo doesn't sink it again.
+- Fixed: a launcher saved from another launcher's parts kept the old one's stage names ("Haytor 002 Stage 2")
+  when the old one had been deleted first. Saving a launcher now gives the parts its own stage names, and a
+  craft that's only that launcher takes its name.
+- Launchers that are renamed or deleted are remembered, so craft built on them keep working stage names
+  (a renamed launcher's follow its new name).
+- A craft built on a launcher that's since been deleted says so: "BUILT ON Haytor 002 · deleted".
+- A saved launcher or subassembly file is written again after other mods are told about the save, so
+  anything they put on the parts (the Reusability Suite's design id) is in the file too.
 
 ## 0.1.0 (2026-11-07)
 

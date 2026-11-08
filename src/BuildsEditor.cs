@@ -120,11 +120,12 @@ namespace PhilsBuilds
 
         void OnEditorLoad(ShipConstruct ship, CraftBrowserDialog.LoadType type)
         {
+            SubFile opened = null;
             if (loadingSub != null && type == CraftBrowserDialog.LoadType.Normal && ship?.parts != null && ship.parts.Count > 0)
             {
-                SubFile s = loadingSub;
+                opened = loadingSub;
                 loadingSub = null;
-                OpenedSub(ship, s);
+                OpenedSub(ship, opened);
             }
             // The editor's parts come in file order, so they're the design's slots.
             if (placing != null && ship?.parts != null &&
@@ -138,6 +139,8 @@ namespace PhilsBuilds
             lastPayloadName = null;
             AdoptFolder(EditorDriver.filePathToLoad);
             Relabel();
+            // KSP took its undo step as the file loaded: before the lift and the stage names.
+            if (opened != null) Stock.RetakeUndoStep();
         }
 
         // After loading a craft, its own folder is where it saves.
@@ -455,6 +458,8 @@ namespace PhilsBuilds
             try
             {
                 if (!Thumbs.Has(s.Name)) Thumbs.Take(ship, s.Name);
+                float lift = Stock.LiftOffFloor(ship);
+                if (lift > 0) Debug.Log($"[PhilsBuilds] Lifted {s.Name} {lift:0.00} m onto the floor (floor at {Stock.Floor:0.00} m)");
                 if (s.Kind == SubKind.Launcher) LauncherTags.Tag(ship.parts[0].localRoot, s.Name);
                 // Saves go to the facility's own folder until it's filed, not into the
                 // Subassemblies folder it came from or a family folder left open before.
@@ -520,6 +525,7 @@ namespace PhilsBuilds
             SubFile s = editing;
             System.Collections.Generic.List<Part> saved = null;
             bool existed = FileExists(Path.Combine(Library.SubsDir, name + ".craft"));
+            bool stage = info.Kind == SubKind.Launcher || info.Kind == SubKind.UpperStage;
             if (held != null)
             {
                 saved = Stock.SaveSubassembly(name, "", held);
@@ -527,7 +533,7 @@ namespace PhilsBuilds
                 Library.Scan();
                 s = Library.SubNamed(name);
                 if (s == null) throw new IOException("It saved, but under a different name.");
-                StripLauncherNames(s.Path, info.Kind == SubKind.Launcher || info.Kind == SubKind.UpperStage);
+                StripLauncherNames(s.Path, stage);
             }
             else if (s != null && !Naming.SameName(s.Name, name) || s != null && s.Name != name)
             {
@@ -545,16 +551,38 @@ namespace PhilsBuilds
             Library.SaveStore();
             EditorPartList.Instance?.RefreshSubassemblies();
             string path = s.Path;
-            Refresh(selectSub: Library.SubNamed(name));
+            Refresh(selectSub: Library.SubNamed(name));         // reads the library again, with this one's kind
+            if (held != null && info.Kind == SubKind.Launcher) BecomeLauncher(held, name);
             Say($"Saved {name}");
-            if (saved != null) BuildsApi.RaiseSaved(BuildsApi.OfFile(path), !existed, saved);
+            if (saved == null) return;
+            BuildsApi.RaiseSaved(BuildsApi.OfFile(path), !existed, saved);
+            // Listeners may have written to the parts just saved (the Reusability Suite
+            // stamps its design id on them), so the file is written again to match.
+            if (BuildsApi.HasSavedListeners && Stock.SaveSubassembly(name, "", held, picture: false) != null) StripLauncherNames(path, stage);
+        }
+
+        // The parts just saved as a launcher are that launcher now, though they may have
+        // come from another one (deleted, or still in the library): they get its stage names,
+        // and a craft that's only this launcher, still named after the old one, takes its name.
+        void BecomeLauncher(Part held, string launcher)
+        {
+            try
+            {
+                var tree = new System.Collections.Generic.HashSet<Part>(LauncherTags.Subtree(held));
+                bool whole = Stock.HoldingCraft || (Stock.Ship?.parts?.All(tree.Contains) ?? true);
+                LauncherTags.Tag(held, launcher);
+                if (whole && (Stock.IsDefaultName(Stock.ShipName) || LauncherTags.Known(Stock.ShipName))) Stock.ShipName = launcher;
+                Relabel();
+            }
+            catch (Exception e) { Debug.LogWarning($"[PhilsBuilds] Naming {launcher}'s stages: {e.Message}"); }
         }
 
         // A subassembly saved from a craft that was built on a library launcher carries
         // its stage names; they come off, and a launcher gets fresh ones when it's next
         // picked up. Only the parts' VESSELNAMING nodes are looked at, and only names this
-        // mod writes: stage names of launchers in the library, and (saving a launcher or
-        // upper stage) the craft name a lone launcher's top part carried.
+        // mod writes: stage names of launchers in the library (or that were), and (saving a
+        // launcher or upper stage) any stage-shaped name at a stage's priority, whichever
+        // launcher it came from, and the craft name a lone launcher's top part carried.
         static void StripLauncherNames(string path, bool stage)
         {
             try
@@ -568,7 +596,7 @@ namespace PhilsBuilds
                     foreach (ConfigNode n in parts[i].GetNodes("VESSELNAMING"))
                     {
                         string pri = n.GetValue("priority"), name = n.GetValue("name");
-                        bool ours = (pri == label || pri == old) && LauncherTags.IsLabelName(name) ||
+                        bool ours = (pri == label || pri == old) && (LauncherTags.IsLabelName(name) || stage && LauncherTags.LooksLikeLabel(name)) ||
                                     stage && i == 0 && pri == top && n.GetValue("type") != "Debris";
                         if (!ours) continue;
                         parts[i].RemoveNode(n);

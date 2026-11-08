@@ -91,6 +91,10 @@ namespace PhilsBuilds
         static readonly Dictionary<string, ConfigNode> subNodes = new Dictionary<string, ConfigNode>(StringComparer.OrdinalIgnoreCase);
         static readonly Dictionary<string, MarkStyle> familyStyles = new Dictionary<string, MarkStyle>(StringComparer.OrdinalIgnoreCase);
         static readonly Dictionary<string, DesignIds> designIds = new Dictionary<string, DesignIds>(StringComparer.OrdinalIgnoreCase);
+        // Launchers renamed (old name -> new) or deleted (name -> ""). Craft built on one
+        // still carry its stage names, and they stay this mod's: a renamed launcher's follow
+        // its new name, a deleted one's keep the name they had.
+        static readonly Dictionary<string, string> formerLaunchers = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
 
         public static int Version { get; private set; }
         static string scannedSave;
@@ -342,6 +346,21 @@ namespace PhilsBuilds
 
         public static SubFile SubNamed(string name) => Subs.FirstOrDefault(s => Naming.SameName(s.Name, name));
 
+        public static bool HasLauncher(string name) => Subs.Any(s => s.Kind == SubKind.Launcher && Naming.SameName(s.Name, name));
+
+        // A launcher of this name was in the library and has been renamed or deleted.
+        public static bool WasLauncher(string name) => !string.IsNullOrEmpty(name) && formerLaunchers.ContainsKey(name.Trim());
+
+        // What a launcher is called now: a renamed one's latest name; any other name as it is
+        // (a launcher in the library, a deleted one, or a name this mod never wrote).
+        public static string LauncherNow(string name)
+        {
+            if (string.IsNullOrEmpty(name)) return name;
+            name = name.Trim();
+            for (int i = 0; i < 20 && !HasLauncher(name) && formerLaunchers.TryGetValue(name, out string now) && now.Length > 0; i++) name = now;
+            return name;
+        }
+
         public static string NoteKey(CraftFile c) => NoteKey(c.Facility, c.RelDir, c.Name);
 
         public static string NoteKey(string facility, string relDir, string name) =>
@@ -439,6 +458,7 @@ namespace PhilsBuilds
             Notes.Clear();
             familyStyles.Clear();
             designIds.Clear();
+            formerLaunchers.Clear();
             if (!File.Exists(StorePath)) return;
             try
             {
@@ -463,6 +483,11 @@ namespace PhilsBuilds
                 {
                     string key = d.GetValue("key"), id = d.GetValue("id"), line = d.GetValue("line");
                     if (!string.IsNullOrEmpty(key) && !string.IsNullOrEmpty(id)) designIds[key] = new DesignIds { Id = id, Line = string.IsNullOrEmpty(line) ? id : line };
+                }
+                foreach (ConfigNode f in n.GetNodes("FORMER_LAUNCHER"))
+                {
+                    string name = f.GetValue("name");
+                    if (!string.IsNullOrEmpty(name)) formerLaunchers[name] = f.GetValue("now") ?? "";
                 }
             }
             catch (Exception e)
@@ -519,6 +544,12 @@ namespace PhilsBuilds
                     c.AddValue("key", kv.Key);
                     c.AddValue("id", kv.Value.Id);
                     c.AddValue("line", kv.Value.Line);
+                }
+                foreach (KeyValuePair<string, string> kv in formerLaunchers.OrderBy(x => x.Key, StringComparer.OrdinalIgnoreCase))
+                {
+                    ConfigNode c = n.AddNode("FORMER_LAUNCHER");
+                    c.AddValue("name", kv.Key);
+                    if (kv.Value.Length > 0) c.AddValue("now", kv.Value);
                 }
                 Directory.CreateDirectory(SaveDir);
                 root.Save(StorePath);
@@ -634,6 +665,7 @@ namespace PhilsBuilds
             for (int i = 2; File.Exists(target); i++) target = System.IO.Path.Combine(dest, $"{s.Name} ({i}).craft");
             File.Move(s.Path, target);
             Thumbs.Delete(s.Name);
+            if (s.Kind == SubKind.Launcher) formerLaunchers[s.Name] = "";
             Subs.Remove(s);
             subNodes.Remove(s.Name);
             designIds.Remove(KeyOf(s));
@@ -658,6 +690,11 @@ namespace PhilsBuilds
             subNodes.Remove(s.Name);
             // Craft notes that name this launcher follow the rename.
             foreach (CraftNote n in Notes.Values.Where(n => Naming.SameName(n.Launcher, s.Name))) n.Launcher = newName;
+            if (s.Kind == SubKind.Launcher && !Naming.SameName(s.Name, newName))
+            {
+                formerLaunchers[s.Name] = newName;
+                formerLaunchers.Remove(newName);
+            }
             MoveIds(KeyOf(s), "sub:" + newName);
             Thumbs.Rename(s.Name, newName);
             s.Name = newName;

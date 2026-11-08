@@ -558,7 +558,7 @@ namespace PhilsBuilds
             var bits = new List<string>();
             if (craftFilter == AllKey || craftFilter == CopiesKey) bits.Add(f.Category.Label);
             if (newest.Mass > 0) bits.Add(Naming.Tons(note != null && note.Payload > 0 ? note.Payload : newest.Mass));
-            if (note != null && note.Launcher.Length > 0) bits.Add("on " + note.Launcher);
+            if (note != null && note.Launcher.Length > 0) bits.Add("on " + note.Launcher + (Library.HasLauncher(note.Launcher) ? "" : " (deleted)"));
             if (f.Facility == "SPH") bits.Add("SPH");
 
             // Mark buttons, newest on the right; the five newest are shown.
@@ -1109,12 +1109,15 @@ namespace PhilsBuilds
             {
                 RectTransform on = Kit.Panel(detail, "BuiltOn", DX, y, DW, 44, Look.Panel2, Look.Line, 8);
                 SubFile l = Library.SubNamed(note.Launcher);
+                if (l != null && l.Kind != SubKind.Launcher) l = null;
                 Texture2D lp = Thumbs.Of(l);
                 if (lp != null) Fit(Ui.Node(on, "Pic").At(6, 4, 32, 36), lp, 32, 36);
-                else Kit.Glyph(on, 8, 8, 28, Look.Rocket, Look.Amber);
+                else Kit.Glyph(on, 8, 8, 28, Look.Rocket, l != null ? Look.Amber : Look.Ink3);
                 Kit.Line(on, 42, 5, DW - 50, 14, "BUILT ON", 10, Look.Ink3);
+                // It's still what the craft was built on, after the launcher's gone from the library.
+                string more = l == null ? "· deleted" : l.Rated ? $"· lifts {Naming.Tons(l.Rating)}" : "";
                 Kit.Line(on, 42, 19, DW - 50, 20,
-                    $"<b>{note.Launcher}</b>{(l != null && l.Rated ? $" <color={Look.Html(Look.Ink2)}>· lifts {Naming.Tons(l.Rating)}</color>" : "")}", 14, Look.Ink);
+                    $"<b>{note.Launcher}</b>{(more.Length > 0 ? $" <color={Look.Html(Look.Ink2)}>{more}</color>" : "")}", 14, l != null ? Look.Ink : Look.Ink2);
                 y += 52;
             }
 

@@ -17,7 +17,9 @@
 // time they're edited.
 //
 // Only names of launchers in this save's library count as stage names, so a craft
-// whose parts the player named by hand is left alone.
+// whose parts the player named by hand is left alone. A launcher that was renamed or
+// deleted still counts (Library remembers it): a craft built on it keeps working
+// stage names, following a renamed launcher's new name.
 
 using System;
 using System.Collections.Generic;
@@ -39,7 +41,8 @@ namespace PhilsBuilds
         static HashSet<string> known;
         static int knownVersion = -1;
 
-        // A launcher of that name is in this save's library.
+        // A launcher of that name is in this save's library, or was before it was renamed
+        // or deleted.
         public static bool Known(string launcher)
         {
             if (string.IsNullOrEmpty(launcher)) return false;
@@ -49,8 +52,11 @@ namespace PhilsBuilds
                 known = new HashSet<string>(Library.Subs.Where(s => s.Kind == SubKind.Launcher).Select(s => s.Name), StringComparer.OrdinalIgnoreCase);
                 knownVersion = Library.Version;
             }
-            return known.Contains(launcher.Trim());
+            return known.Contains(launcher.Trim()) || Library.WasLauncher(launcher);
         }
+
+        // Shaped like a stage name ("<launcher> Stage 2", "<launcher> Booster"), whoever wrote it.
+        public static bool LooksLikeLabel(string name) => !string.IsNullOrEmpty(name) && Label.IsMatch(name);
 
         // "Cypress 010 Stage 1" -> "Cypress 010"; a bare launcher name stays as it is.
         public static string LauncherPart(string name)
@@ -164,8 +170,9 @@ namespace PhilsBuilds
 
         // ---- Tagging -------------------------------------------------------------------------
 
-        // The launcher a tagged part came from: "Cypress 010 Stage 1" -> "Cypress 010".
-        public static string LauncherOf(Part p) => IsLabel(p) ? LauncherPart(p.vesselNaming.vesselName) : null;
+        // The launcher a tagged part came from: "Cypress 010 Stage 1" -> "Cypress 010"
+        // (or what it's called now, if it was renamed).
+        public static string LauncherOf(Part p) => IsLabel(p) ? Library.LauncherNow(LauncherPart(p.vesselNaming.vesselName)) : null;
 
         // Names every part of a launcher just picked up from the library.
         public static void Tag(Part launcherRoot, string launcherName)
