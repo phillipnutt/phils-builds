@@ -1108,9 +1108,11 @@ namespace PhilsBuilds
             if (note != null && note.Launcher.Length > 0)
             {
                 RectTransform on = Kit.Panel(detail, "BuiltOn", DX, y, DW, 44, Look.Panel2, Look.Line, 8);
-                Kit.Glyph(on, 8, 8, 28, Look.Rocket, Look.Amber);
-                Kit.Line(on, 42, 5, DW - 50, 14, "BUILT ON", 10, Look.Ink3);
                 SubFile l = Library.SubNamed(note.Launcher);
+                Texture2D lp = Thumbs.Of(l);
+                if (lp != null) Fit(Ui.Node(on, "Pic").At(6, 4, 32, 36), lp, 32, 36);
+                else Kit.Glyph(on, 8, 8, 28, Look.Rocket, Look.Amber);
+                Kit.Line(on, 42, 5, DW - 50, 14, "BUILT ON", 10, Look.Ink3);
                 Kit.Line(on, 42, 19, DW - 50, 20,
                     $"<b>{note.Launcher}</b>{(l != null && l.Rated ? $" <color={Look.Html(Look.Ink2)}>· lifts {Naming.Tons(l.Rating)}</color>" : "")}", 14, Look.Ink);
                 y += 52;
