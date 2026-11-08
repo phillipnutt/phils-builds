@@ -175,9 +175,12 @@ namespace PhilsBuilds
             {
                 Part top = set.FirstOrDefault(p => p.parent == null || !set.Contains(p.parent));
                 if (top == null) return;
+                // It flies as what it is: a probe or ship if it has command parts.
+                VesselType own = PieceType(set);
+                VesselType type = own != VesselType.Debris ? own : payloadType;
                 if (top.vesselNaming == null || top.vesselNaming.namingPriority != RootPriority || top.vesselNaming.vesselName != shipName ||
-                    top.vesselNaming.vesselType != payloadType)
-                    top.vesselNaming = new VesselNaming { vesselName = shipName, vesselType = payloadType, namingPriority = RootPriority };
+                    top.vesselNaming.vesselType != type)
+                    top.vesselNaming = new VesselNaming { vesselName = shipName, vesselType = type, namingPriority = RootPriority };
                 lastPayloadName = shipName;
                 return;
             }
