@@ -123,6 +123,26 @@ Checks: `Tools/Test-Core.ps1` runs 67 checks on the naming rules; `Tools/Check-N
   (a program like DESU, or a job like Control). Launchers and upper stages keep their ratings and marks.
 - **The drop box** saves the whole craft when nothing is held.
 
+## Changed after Phil's play-test with the suite (2026-11-07, built overnight for Phil to review)
+
+Phil played the D: test copy with the Reusability Suite; its session wrote up what he hit in Phil's Builds.
+Phil let both sessions build overnight without his sign-off ("Build freely"), so these await his review.
+- **A launcher rated under the payload still shows its hangar copies.** Phil filed Kopje 005 at 5 t, built
+  one, then opened the Launchers tab on a 5.5 t payload. Kopje was listed as too small, with no rows, and he
+  read it as "the built Kopje wasn't recognised". Now too-small launchers keep their copy rows and hangar
+  note, and the copies can still be picked: the rating is the player's own estimate, not a hard limit. The
+  list heading says "Too small or too narrow for this payload", the line reads "Rated 5.0 t. This payload is
+  5.5 t.", and a **Re-rate** button opens its rating.
+- **The hangar filter is "Built copies"**, not "With flown copies": it lists ready, never-flown copies too.
+- **A launcher picked into an empty editor names the craft after itself** ("Kopje 005", not "Untitled Space
+  Craft"), so the VAB's name box matches. Only a default name is replaced. The same goes for a hangar copy.
+- **Load for launchers and upper stages.** With nothing in the editor, the launcher's panel offers Load
+  (and Pick up beside it). Load opens the launcher as the whole craft, placed rather than held on the
+  cursor, named after itself, with its stage names. Saves go to the facility's own folder until it's
+  filed. Double-clicking a launcher in an empty editor loads it too.
+- **The Save panel deals a new name** when the name box holds a launcher's or upper stage's name, since a
+  payload built on a loaded launcher is a new design.
+
 ## Banked ideas (Phil's play-test thoughts, not decided)
 
 - **Merge holds a craft by its root part** (2026-11-06). A saved capsule with a heat shield below and a

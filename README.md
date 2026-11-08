@@ -50,6 +50,8 @@ Remove the folder to go back to stock. Your craft stay where they are.
   up its top part first). Give it a rating, tons to orbit and widest payload, from your own test flights.
 - **Pick a launcher:** build the payload, open the Launchers tab, and click one that fits. It comes up
   on the cursor, ready to attach underneath.
+- **Fly a launcher on its own:** with nothing in the editor, press Load on a launcher (or double-click it).
+  It opens as the craft, named after itself.
 - **Unfiled craft** from before you installed the mod are listed under Unfiled. File them into families
   from there.
 

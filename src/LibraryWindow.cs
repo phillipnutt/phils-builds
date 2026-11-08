@@ -336,8 +336,9 @@ namespace PhilsBuilds
                 () => { launcherFilter = UpperKey; RebuildAll(); }, 26);
             if (Hangar)
             {
+                // Ready copies count as well as flown ones (Phil's play-test), so not "flown".
                 RailHead("Hangar");
-                RailItem("With flown copies", null, Library.Subs.Count(s => IsStage(s) && InHangar(s.Path)), launcherFilter == CopiesKey,
+                RailItem("Built copies", null, Library.Subs.Count(s => IsStage(s) && InHangar(s.Path)), launcherFilter == CopiesKey,
                     () => { launcherFilter = CopiesKey; RebuildAll(); }, 26, good: true);
             }
             Kit.Text(rail, 16, H - TitleH - 76, RailW - 30, 64,
@@ -688,7 +689,7 @@ namespace PhilsBuilds
             {
                 List<SubFile> withCopies = Library.Subs.Where(s => IsStage(s) && InHangar(s.Path))
                     .OrderBy(s => s.Kind).ThenBy(s => s.Rated ? s.Rating : float.MaxValue).ThenBy(s => s.Name).ToList();
-                if (withCopies.Count == 0) Empty(content, "Nothing in the hangar", "Flown copies show here once they come home.");
+                if (withCopies.Count == 0) Empty(content, "Nothing in the hangar", "Copies show here once they're built, and again when they come home.");
                 foreach (SubFile s in withCopies) y = LauncherRow(content, s, 16, y, w, false, false) + 7;
                 scroller.SetHeight(y + 8);
                 return;
@@ -717,7 +718,7 @@ namespace PhilsBuilds
             foreach (SubFile s in fit) { y = LauncherRow(content, s, 16, y, w, check && first, false) + 7; first = false; }
             if (small.Count > 0)
             {
-                Kit.Eyebrow(content, 18, y + 4, w, "Too small or too narrow");
+                Kit.Eyebrow(content, 18, y + 4, w, "Too small or too narrow for this payload");
                 y += 24;
                 foreach (SubFile s in small) y = LauncherRow(content, s, 16, y, w, false, true) + 7;
             }
@@ -733,8 +734,11 @@ namespace PhilsBuilds
         float LauncherRow(RectTransform content, SubFile s, float x, float y, float w, bool best, bool dim)
         {
             Library.LoadStats(s);
-            IList<CopyRow> copies = dim ? NoRows : RowsFor(s.Path);
-            string hangarNote = dim ? null : NoteFor(s.Path);
+            // A launcher rated under the payload still shows its hangar copies, and they can
+            // still be picked: the rating is the player's own estimate (Phil's play-test:
+            // a ready copy hidden here looked as if it hadn't been recognised).
+            IList<CopyRow> copies = RowsFor(s.Path);
+            string hangarNote = NoteFor(s.Path);
             float head = string.IsNullOrEmpty(hangarNote) ? 58 : 66;
             bool selected = SelSub == s;
             float h = head + copies.Count * CopyH;
@@ -744,7 +748,7 @@ namespace PhilsBuilds
                 selectedSubPath = s.Path;
                 selectedCopyKey = null;
                 confirmDelete = false;
-                if (n >= 2) { host.PickUp(s); return; }
+                if (n >= 2) { if (Stock.Empty) host.LoadSub(s); else host.PickUp(s); return; }
                 RebuildList();
                 RebuildDetail();
             }));
@@ -765,8 +769,8 @@ namespace PhilsBuilds
             if (s.Kind == SubKind.UpperStage)
                 sub = $"Upper stage{(s.Mass > 0 ? " · " + Naming.Tons(s.Mass) : "")}{(s.Stages > 0 ? $" · {s.Stages} stage{(s.Stages == 1 ? "" : "s")}" : "")}";
             else if (!s.Rated) sub = "Add a rating to check whether it fits.";
-            else if (dim) sub = s.Rating + 0.001f < payloadMass ? $"Lifts {Naming.Tons(s.Rating)}. This payload is {Naming.Tons(payloadMass)}."
-                : $"Up to {Naming.Meters(s.Width)} wide. This payload is {Naming.Meters(payloadWidth)}.";
+            else if (dim) sub = s.Rating + 0.001f < payloadMass ? $"Rated {Naming.Tons(s.Rating)}. This payload is {Naming.Tons(payloadMass)}."
+                : $"Rated {Naming.Meters(s.Width)} wide. This payload is {Naming.Meters(payloadWidth)}.";
             else sub = $"Lifts {Naming.Tons(s.Rating)}{(s.Width > 0 ? " · up to " + Naming.Meters(s.Width) : "")}" +
                        $"{(s.Stages > 0 ? $" · {s.Stages} stage{(s.Stages == 1 ? "" : "s")}" : "")}{(s.Cost > 0 ? " · " + Naming.Funds(s.Cost) : "")}";
             Kit.Line(row, 64, 30, textW + 60, 18, sub, 12, ink2);
@@ -782,6 +786,9 @@ namespace PhilsBuilds
             }
             else if (!s.Rated && s.Kind == SubKind.Launcher)
                 Track(Kit.Ghost(row, "Rate it", w - 12 - 76, 14, 76, 30, () => Later(() => { selectedSubPath = s.Path; selectedCopyKey = null; RebuildList(); RebuildDetail(); })));
+            // Too small by its rating: say how to change that, right here.
+            else if (dim)
+                Track(Kit.Ghost(row, "Re-rate", w - 12 - 76, 14, 76, 30, () => Later(() => { selectedSubPath = s.Path; selectedCopyKey = null; RebuildList(); RebuildDetail(); })));
             for (int i = 0; i < copies.Count; i++) CopyRowUi(row, head + i * CopyH, w, s.Path, copies[i], null, false);
             return y + h;
         }
@@ -1270,7 +1277,14 @@ namespace PhilsBuilds
                 return;
             }
             float by = bottom - (caption != null ? 104 : 86);
-            Track(Kit.Primary(detail, "Pick up", DX, by, DW, 40, () => Later(() => host.PickUp(s)), 16));
+            if (IsStage(s) && Stock.Empty)
+            {
+                // Nothing in the editor: a launcher or stage can be opened as the craft itself.
+                Track(Kit.Primary(detail, "Load", DX, by, DW - 8 - 104, 40, () => Later(() => host.LoadSub(s)), 16));
+                Track(Kit.Ghost(detail, "Pick up", DX + DW - 104, by + 3, 104, 34, () => Later(() => host.PickUp(s))));
+                caption = "The editor is empty, so Load opens it as the craft.";
+            }
+            else Track(Kit.Primary(detail, "Pick up", DX, by, DW, 40, () => Later(() => host.PickUp(s)), 16));
             if (caption != null) Kit.Line(detail, DX, by + 42, DW, 18, caption, 12, Look.Ink2, align: TextAnchor.MiddleCenter);
             float ly = bottom - 20;
             string fileLabel = s.Kind == SubKind.Unfiled ? "File it…" : "Change…";

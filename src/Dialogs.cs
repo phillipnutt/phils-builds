@@ -287,7 +287,7 @@ namespace PhilsBuilds
             // used, mark and all, and if a family of that name exists this adds to it.
             // Only a craft still called "Untitled Space Craft" gets a dealt name.
             string typed = filing != null ? filing.Base : Stock.ShipName;
-            if (!string.IsNullOrEmpty(typed) && !IsDefault(typed))
+            if (!string.IsNullOrEmpty(typed) && !IsDefault(typed) && !(filing == null && IsStageName(typed)))
             {
                 string fam = Naming.FamilyPart(typed);
                 Family match = Library.Families.FirstOrDefault(f => f.Facility == Facility && Naming.SameName(f.Name, fam));
@@ -309,9 +309,12 @@ namespace PhilsBuilds
 
         static Category Guess() => Category.ById(Stock.Facility == "SPH" ? "Spaceplanes" : "Probes");
 
-        static bool IsDefault(string n) =>
-            Naming.SameName(n, "Untitled Space Craft") || Naming.SameName(n, "Auto-Saved Ship") ||
-            Naming.SameName(n, EditorLogic.autoShipName);
+        static bool IsDefault(string n) => Stock.IsDefaultName(n);
+
+        // A craft started from a launcher opened on its own carries the launcher's name;
+        // what's built on it is a new design, so it gets a name of its own.
+        static bool IsStageName(string n) =>
+            Library.Subs.Any(s => (s.Kind == SubKind.Launcher || s.Kind == SubKind.UpperStage) && Naming.SameName(s.Name, n));
 
         List<Family> FamiliesHere => Library.Families.Where(f => f.Category == cat && f.Facility == Facility).OrderBy(f => f.Name).ToList();
 

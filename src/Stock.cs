@@ -44,6 +44,14 @@ namespace PhilsBuilds
 
         public static ShipConstruct Ship => Editor?.ship;
 
+        // Nothing built yet (a part held over an empty editor doesn't count).
+        public static bool Empty => Ship?.parts == null || Ship.parts.Count == 0 || Held != null && Held == EditorLogic.RootPart;
+
+        // KSP's own names for a craft nobody has named yet.
+        public static bool IsDefaultName(string n) =>
+            string.IsNullOrEmpty(n?.Trim()) || Naming.SameName(n, "Untitled Space Craft") || Naming.SameName(n, "Auto-Saved Ship") ||
+            Naming.SameName(n, EditorLogic.autoShipName);
+
         public static Part Held => EditorLogic.SelectedPart;
 
         public static string SaveFolder => EditorDriver.DefaultCraftSavePath;

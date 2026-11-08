@@ -37,6 +37,7 @@ namespace PhilsBuilds
         Design placing;
         PlaceHow placingHow;
         int placingFrames;
+        SubFile loadingSub;     // a launcher or upper stage being opened as the craft
 
         void Awake() => Instance = this;
 
@@ -100,7 +101,7 @@ namespace PhilsBuilds
                 HookButtons();
                 Stock.HideStockSubassemblies();
             }
-            if (placing != null && --placingFrames <= 0) placing = null;
+            if ((placing != null || loadingSub != null) && --placingFrames <= 0) { placing = null; loadingSub = null; }
             window?.Update();
             dialog?.Update();
         }
@@ -119,6 +120,12 @@ namespace PhilsBuilds
 
         void OnEditorLoad(ShipConstruct ship, CraftBrowserDialog.LoadType type)
         {
+            if (loadingSub != null && type == CraftBrowserDialog.LoadType.Normal && ship?.parts != null && ship.parts.Count > 0)
+            {
+                SubFile s = loadingSub;
+                loadingSub = null;
+                OpenedSub(ship, s);
+            }
             // The editor's parts come in file order, so they're the design's slots.
             if (placing != null && ship?.parts != null &&
                 placingHow == (type == CraftBrowserDialog.LoadType.Merge ? PlaceHow.Merge : PlaceHow.Load))
@@ -407,7 +414,38 @@ namespace PhilsBuilds
             window.Close();
             Design d = BuildsApi.OfFile(s.Path);
             string launcher = s.Kind == SubKind.Launcher ? s.Name : null;
-            if (!Stock.PickUp(s.Path, sc => Spawned(sc, d, PlaceHow.PickUp, launcher, null))) Say($"Couldn't pick up {s.Name}");
+            string name = IsStage(s) && Stock.Empty ? s.Name : null;
+            if (!Stock.PickUp(s.Path, sc => Spawned(sc, d, PlaceHow.PickUp, launcher, null, name))) Say($"Couldn't pick up {s.Name}");
+        }
+
+        static bool IsStage(SubFile s) => s != null && (s.Kind == SubKind.Launcher || s.Kind == SubKind.UpperStage);
+
+        // A launcher or upper stage opened as the whole craft, on an empty editor (Phil:
+        // a launcher on its own should load, not only pick up). It's named after itself,
+        // its stages are named as a picked-up launcher's are, and it saves as a new design.
+        public void LoadSub(SubFile s)
+        {
+            if (s == null) return;
+            if (!IsStage(s) || !Stock.Empty) { PickUp(s); return; }
+            window.Close();
+            placing = BuildsApi.OfFile(s.Path);
+            placingHow = PlaceHow.Load;
+            placingFrames = 30;
+            loadingSub = s;
+            Stock.Load(s.Path);
+        }
+
+        void OpenedSub(ShipConstruct ship, SubFile s)
+        {
+            try
+            {
+                if (s.Kind == SubKind.Launcher) LauncherTags.Tag(ship.parts[0].localRoot, s.Name);
+                // Saves go to the facility's own folder until it's filed, not into the
+                // Subassemblies folder it came from or a family folder left open before.
+                Stock.SetSaveFolder(Library.ShipsDir(Stock.Facility));
+                Stock.ShipName = s.Name;
+            }
+            catch (Exception e) { Debug.LogWarning($"[PhilsBuilds] Opening {s.Name}: {e.Message}"); }
         }
 
         // A hangar copy from the window: New picks up the design itself; anything else
@@ -426,12 +464,13 @@ namespace PhilsBuilds
             ICopies copies = BuildsApi.Copies;
             if (copies == null) return;
             window.Close();
+            string name = (d.Kind == DesignKind.Launcher || d.Kind == DesignKind.UpperStage) && Stock.Empty ? d.Name : null;
             try
             {
                 copies.Build(d, row, sc =>
                 {
                     if (this == null || sc == null || !Stock.Hold(sc)) return;
-                    Spawned(sc, d, PlaceHow.Copy, d.Kind == DesignKind.Launcher ? d.Name : null, row.Id);
+                    Spawned(sc, d, PlaceHow.Copy, d.Kind == DesignKind.Launcher ? d.Name : null, row.Id, name);
                 });
             }
             catch (Exception e)
@@ -442,9 +481,11 @@ namespace PhilsBuilds
         }
 
         // Parts are on the cursor (or are the craft, on an empty editor): name a
-        // launcher's spent stages, and say where the parts came from.
-        void Spawned(ShipConstruct sc, Design d, PlaceHow how, string launcher, string copyId)
+        // launcher's spent stages, and say where the parts came from. A stage picked into
+        // an empty editor gives the craft its name, if it hasn't one yet.
+        void Spawned(ShipConstruct sc, Design d, PlaceHow how, string launcher, string copyId, string shipName = null)
         {
+            if (shipName != null && Stock.IsDefaultName(Stock.ShipName)) Stock.ShipName = shipName;
             if (launcher != null)
             {
                 Part root = Stock.Held ?? sc.parts[0].localRoot;

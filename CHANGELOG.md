@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased
+
+- A launcher rated below the payload still shows its hangar copies, which can still be picked, and has a
+  Re-rate button.
+- The hangar filter on the Launchers tab is "Built copies": it counts ready copies, not only flown ones.
+- A launcher or upper stage picked into an empty editor names the craft after itself.
+- With nothing in the editor, a launcher or upper stage can be loaded as the craft itself (Load, or a
+  double-click), as well as picked up.
+- The Save panel deals a new name when the craft still carries a launcher's name.
+
 ## 0.1.0 (2026-11-07)
 
 First release, a pre-release.
