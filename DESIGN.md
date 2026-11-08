@@ -240,7 +240,7 @@ Behaviour is unchanged except in three corners where the old rules disagreed wit
 
 ## Play-test 3 (2026-11-08, Phil approved the mockups)
 
-Phil's Big Test 1 play-through, routed by the Phil's Mods session.
+From Phil's third play-through.
 - **Save as new design** (Phil). Save is one dialog with three choices for anything already in the
   library: save over the open one, save as the next mark, or save as a new design, which goes on to the
   "What is it?" panel. `MarkDialog` holds the rule; `NextMarkDialog` (a craft's marks) and
