@@ -20,14 +20,16 @@ namespace PhilsBuilds
 
         public static string FileFor(string sub) => Path.Combine(KSPUtil.ApplicationRootPath, "thumbs", Name(sub) + ".png");
 
-        public static bool Has(string sub) => !string.IsNullOrEmpty(sub) && File.Exists(FileFor(sub));
+        // A blank picture (one taken by 0.1.0 of parts held on the cursor) counts as none, so
+        // it's taken again the next time the launcher is loaded or added to a craft.
+        public static bool Has(string sub) => !string.IsNullOrEmpty(sub) && Load(FileFor(sub)) != null;
 
         public static void TakeIfMissing(ShipConstruct sc, string sub) { if (!Has(sub)) Take(sc, sub); }
 
-        public static Texture2D Of(SubFile s)
+        public static Texture2D Of(SubFile s) => s == null ? null : Load(FileFor(s.Name));
+
+        static Texture2D Load(string file)
         {
-            if (s == null) return null;
-            string file = FileFor(s.Name);
             try
             {
                 if (!File.Exists(file)) return null;
@@ -38,15 +40,21 @@ namespace PhilsBuilds
                     if (had.Value != null) UnityEngine.Object.Destroy(had.Value);
                 }
                 Texture2D t = new Texture2D(2, 2, TextureFormat.ARGB32, false) { hideFlags = HideFlags.HideAndDontSave };
-                if (!t.LoadImage(File.ReadAllBytes(file))) { UnityEngine.Object.Destroy(t); t = null; }
+                if (!t.LoadImage(File.ReadAllBytes(file)) || Blank(t)) { UnityEngine.Object.Destroy(t); t = null; }
                 cache[file] = new KeyValuePair<long, Texture2D>(ticks, t);
                 return t;
             }
             catch (Exception e)
             {
-                Debug.LogWarning($"[PhilsBuilds] Couldn't read the picture of {s.Name}: {e.Message}");
+                Debug.LogWarning($"[PhilsBuilds] Couldn't read the picture {Path.GetFileName(file)}: {e.Message}");
                 return null;
             }
+        }
+
+        static bool Blank(Texture2D t)
+        {
+            foreach (Color32 c in t.GetPixels32()) if (c.a != 0) return false;
+            return true;
         }
 
         // A picture of these parts alone. Everything else in the editor is hidden for the
@@ -56,8 +64,20 @@ namespace PhilsBuilds
             if (sc?.parts == null || sc.parts.Count == 0 || string.IsNullOrEmpty(sub)) return;
             var keep = new HashSet<Part>(sc.parts.Where(p => p != null));
             var hidden = new List<Renderer>();
+            var lifted = new List<GameObject>();
             try
             {
+                // KSP moves parts held on the cursor to layer 1 and back to 0 when they're
+                // attached. The picture camera sees only layer 0, so a launcher saved from the
+                // drop box while held came out blank (Phil's Shkhara 022, 2026-11-08). Held
+                // parts go back to layer 0 for the one render.
+                foreach (Part p in keep)
+                    foreach (Renderer r in p.GetComponentsInChildren<Renderer>(true))
+                        if (r.gameObject.layer == HeldLayer && r.GetComponentInParent<Part>() == p)
+                        {
+                            r.gameObject.layer = 0;
+                            lifted.Add(r.gameObject);
+                        }
                 // The craft's parts, and anything else on the cursor: a held part's mirrored
                 // copies aren't in the craft's part list until they're attached.
                 var all = new HashSet<Part>(Stock.Ship?.parts ?? new List<Part>());
@@ -82,8 +102,11 @@ namespace PhilsBuilds
             finally
             {
                 foreach (Renderer r in hidden) if (r != null) r.enabled = true;
+                foreach (GameObject g in lifted) if (g != null) g.layer = HeldLayer;
             }
         }
+
+        const int HeldLayer = 1;     // EditorLogic's pick-up step: SetLayerRecursive(1, true, 1 << 21)
 
         public static void Rename(string from, string to)
         {

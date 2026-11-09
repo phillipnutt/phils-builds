@@ -1065,7 +1065,9 @@ namespace PhilsBuilds
             Ui.SetSprite(dropBg, hot ? Look.Round(Look.Wash(Look.Panel2, 0.15f), Look.Amber, 8) : Look.Round(Look.Panel2, Look.Line2, 8));
             dropText.color = hot ? Look.Amber : Look.Ink2;
             string what = tab == Tab.Launchers ? "a launcher" : "a module or block";
+            CraftFile payload = state == 1 && tab == Tab.Launchers ? host.PayloadUnderBuild() : null;
             if (state == 2) dropText.text = $"Click here to save {Stock.Held.partInfo?.title ?? "this part"} and everything under it";
+            else if (payload != null) dropText.text = $"Launcher under {payload.Name}? Grab its top part, then click here. Click now to save the whole craft.";
             else if (state == 1) dropText.text = $"Click to save the whole craft as {what}, or grab a part to save just that piece";
             else dropText.text = $"Build something or grab a part, then click here to save it as {what}";
         }

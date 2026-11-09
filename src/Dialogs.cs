@@ -714,9 +714,16 @@ namespace PhilsBuilds
             }
             else blockName = wholeCraft ? Stock.ShipName : held?.partInfo?.title ?? "";
             if (family.Length == 0 && SubKinds.IsStage(this.kind)) Deal();
+            // The whole craft, with a craft design in it: maybe only the launcher under it was meant.
+            if (editing == null && wholeCraft && host.PayloadUnderBuild() is CraftFile payload)
+                payloadNote = $"This saves everything in the editor, {payload.Name} too. For just the launcher under {payload.Name}, cancel, " +
+                              "grab the launcher's top part, and click the drop box on the Launchers tab.";
             string title = editing == null ? "Save a subassembly" : editing.Kind == SubKind.Unfiled ? $"File {editing.Name}" : $"Change {editing.Name}";
-            Open(title, editing != null ? "Sets what it is and names it to match" : wholeCraft ? "The whole craft in the editor" : $"{held?.partInfo?.title ?? "The held part"} and everything under it", 600, 660);
+            Open(title, editing != null ? "Sets what it is and names it to match" : wholeCraft ? "The whole craft in the editor" : $"{held?.partInfo?.title ?? "The held part"} and everything under it",
+                600, payloadNote == null ? 660 : 704);
         }
+
+        readonly string payloadNote;
 
         // Phil's old style: "Launch - Oak 030" means the Oak launcher, rated 30 t.
         void GuessFromName(string n)
@@ -790,6 +797,11 @@ namespace PhilsBuilds
         protected override void BuildBody()
         {
             float y = 16;
+            if (payloadNote != null)
+            {
+                Kit.Text(body, Pad, 14, W - 2 * Pad, 36, payloadNote, 13, Look.Warn, align: TextAnchor.UpperLeft);
+                y += 44;
+            }
             y = Label(y, "What is it?");
             y = Segments(y, KindLabels, Array.IndexOf(Kinds, kind), i =>
             {

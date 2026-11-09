@@ -132,7 +132,7 @@ namespace PhilsBuilds
 
     public static class BuildsApi
     {
-        public const int Version = 2;       // 2: CopyDetail.OpenLabel and Open
+        public const int Version = 3;       // 2: CopyDetail.OpenLabel and Open. 3: PictureOf, PictureFile
 
         // Fired whenever Phil's Builds reads the library again: after every save,
         // filing, rename, re-rating and delete, and when its window opens.
@@ -177,6 +177,37 @@ namespace PhilsBuilds
 
         // Opens Phil's Builds' Save panel in the editor, to file the open craft.
         public static void OpenSave() => BuildsEditor.Instance?.OpenSave();
+
+        // ---- Pictures (version 3) --------------------------------------------------------------
+
+        // The design's picture, the one the library shows: KSP's own for craft (taken when
+        // they're saved), Phil's Builds' own for launchers, upper stages and blocks. 256 × 256
+        // on a clear background; null when there isn't one yet. Works outside the editor too.
+        // Phil's Builds owns the texture: don't destroy or change it. It's swapped for a new one
+        // when the file changes, so ask again when drawing (it's cached).
+        public static Texture2D PictureOf(Design d)
+        {
+            if (d == null) return null;
+            try
+            {
+                if (d.Kind == DesignKind.Craft) return Library.CraftAt(d.Path) is CraftFile c ? Library.Thumbnail(c) : null;
+                return Thumbs.Of(Library.Subs.FirstOrDefault(s => Paths.Same(s.Path, d.Path)));
+            }
+            catch (Exception e)
+            {
+                Debug.LogWarning($"[PhilsBuilds] Couldn't find the picture of {d.Name}: {e.Message}");
+                return null;
+            }
+        }
+
+        public static Texture2D PictureOf(string designId) => PictureOf(Find(designId));
+
+        // Where that picture is (or will be) as a PNG file; the file may not exist yet.
+        public static string PictureFile(Design d)
+        {
+            if (d == null) return null;
+            return d.Kind == DesignKind.Craft ? Library.ThumbFile(System.IO.Path.GetDirectoryName(d.Path), d.Name) : Thumbs.FileFor(d.Name);
+        }
 
         // ---- Hangar copies -----------------------------------------------------------------
 

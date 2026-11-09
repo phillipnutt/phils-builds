@@ -317,6 +317,19 @@ namespace PhilsBuilds
             return s;
         }
 
+        // The craft design open in the editor, when more has been built onto it and none of it
+        // is a library launcher: maybe a launcher under a payload, still to be saved on its own.
+        // Null otherwise. The drop box and the whole-craft launcher save then say how to save
+        // just the launcher (Phil had to ask, play-test 2026-11-08).
+        public CraftFile PayloadUnderBuild()
+        {
+            if (!Stock.HasCraft || !(Library.CraftAt(Stock.CurrentFile) is CraftFile c) || !c.Filed) return null;
+            Library.LoadStats(c);
+            var parts = Stock.Ship?.parts;
+            if (parts == null || c.Parts <= 0 || parts.Count <= c.Parts) return null;
+            return parts.Any(LauncherTags.IsLauncherPart) ? null : c;
+        }
+
         // Saves the craft in the editor as a launcher or upper stage already in the library:
         // over it (the same name), or as its next mark.
         public void SaveStage(SubFile current, string name, int mark)

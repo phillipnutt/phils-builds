@@ -85,7 +85,8 @@ Launcher lists also take `class = Light`, `Medium`, `Heavy` or `SuperHeavy`.
 `PhilsBuilds.BuildsApi`, in `src/Api.cs`, lets another mod:
 - read the library, where each design has a stable id;
 - hear when parts from a design are placed in the editor or saved;
-- show its own built copies of a design (a hangar) in the library window.
+- show its own built copies of a design (a hangar) in the library window;
+- show a design's picture, the one the library shows.
 
 Nothing changes unless a mod uses it. Reference `PhilsBuilds.dll` and declare
 `[KSPAssemblyDependency("PhilsBuilds", 0, 1)]`.

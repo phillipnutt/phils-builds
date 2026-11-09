@@ -51,6 +51,13 @@
 - The hangar copy panel can show a second button beside Load, from the mod that keeps the hangar: the
   Reusability Suite's "Load as stored". BuildsApi version 2 adds `CopyDetail.OpenLabel` and `Open` for it;
   everything in version 1 is unchanged.
+- Fixed: a launcher or subassembly saved from the drop box while held on the cursor got a blank picture.
+  Pictures that came out blank are taken again the next time the design is loaded or added to a craft.
+- When more has been built onto a craft design (a launcher under a payload, say), the Launchers tab's drop
+  box and the whole-craft launcher save say how to save just the launcher: grab its top part and click the
+  drop box.
+- BuildsApi version 3 adds `PictureOf` and `PictureFile`: the library's picture of a design, for other
+  mods to show.
 
 ## 0.1.0 (2026-11-07)
 

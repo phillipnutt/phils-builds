@@ -278,6 +278,25 @@ From Phil's third play-through.
   Suite checks for the field by reflection. Wear % (play-test #17) needs nothing here: it goes in
   `CopyRow.Text` and a detail chip.
 
+## Play-test round 2 (2026-11-08 evening)
+
+- **Blank launcher pictures** (Phil: "it should have a pic"). KSP's pick-up step moves held parts to layer
+  1 (`SetLayerRecursive(1, true, 1 << 21)` in an `EditorLogic` FSM step) and back to 0 when they're
+  attached. `CraftThumbnail.TakeSnaphot`'s camera sees only layer 0, so a launcher saved from the drop box
+  while held came out fully clear. `Thumbs.Take` moves the held parts' renderers to layer 0 for its one
+  render and back after. A clear picture counts as none (`Thumbs.Has`), so old ones are taken again by
+  `TakeIfMissing` on the next load or Add to craft.
+- **Payload width.** The rule stays: a payload's width is its widest point, the same box KSP uses for a
+  craft's size. A payload can be wider than its body (an NRAP test weight has feet around its base), so a
+  launcher rated at its stack width can show as too narrow. Re-rate it if its fairing really takes that.
+- **Saving the launcher under a payload** (Phil had to ask how). `PayloadUnderBuild`: the open file is a
+  filed craft, the editor has more parts than that file, and none is a library launcher's. Then the
+  Launchers tab's drop box (with nothing held) reads "Launcher under X? Grab its top part, then click
+  here", and the whole-craft launcher save has a note saying the same.
+- **BuildsApi version 3.** `PictureOf(Design)`, `PictureOf(id)` and `PictureFile(Design)`, for the
+  Reusability Suite's Build queue and Hangar (Phil's ask). The texture is Phil's Builds' own and is
+  replaced when the file changes, so callers ask again rather than keep it. It works outside the editor.
+
 ## Banked ideas (Phil's play-test thoughts, not decided)
 
 - **Merge holds a craft by its root part** (2026-11-06). A saved capsule with a heat shield below and a
