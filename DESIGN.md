@@ -297,6 +297,26 @@ From Phil's third play-through.
   Reusability Suite's Build queue and Hangar (Phil's ask). The texture is Phil's Builds' own and is
   replaced when the file changes, so callers ask again rather than keep it. It works outside the editor.
 
+## Back in the editor with the same craft (S9, 2026-11-13, Phil approved)
+
+- **The bug.** After a KRASH sim, Save treated Henson I as a new design. KRASH ends a sim by loading its
+  revert save and calling `Game.Start()` into the editor. `Game.Start` sets `EditorDriver.filePathToLoad`
+  to the KSP folder plus `craftFileToLoad` (empty), and KRASH then opens the editor on its cached craft.
+  The editor's startup used `AdoptFolder(filePathToLoad)`, so saves went to the VAB folder and the filed
+  mark looked unfiled. Stock Revert to the VAB had the same weakness whenever the craft had been saved into
+  a new folder since its last load: `RevertToPrelaunch` never touches `filePathToLoad`.
+- **The rule (Phil):** coming back to the editor with the same craft (Revert to the editor, the end of a
+  KRASH sim, back in from the space center), Save treats it exactly as before you left.
+- **How.** On `onGameSceneLoadRequested` the editor notes the save, the save folder and the craft's name.
+  As it opens, `EditorDriver.StartupBehaviour` says how: `LOAD_FROM_FILE` adopts that file's folder, as
+  before. `LOAD_FROM_CACHE` (KSP's kept craft) puts the noted folder back when the craft's name and the
+  save match and the folder still exists. Failing that, a craft launched from a filed craft file (the
+  launch pad's own list, then Revert) goes to that file's folder (`FlightDriver.newShipToLoadPath`).
+  Anything else, `START_CLEAN` included, saves to the building's own folder: no folder is taken from a
+  stale load path.
+- **Save without filing** in the broken state wrote a loose Henson I.craft into the VAB folder; the next
+  Save of the filed mark would have moved it to Deleted craft. With the fix the state doesn't arise.
+
 ## Banked ideas (Phil's play-test thoughts, not decided)
 
 - **Merge holds a craft by its root part** (2026-11-06). A saved capsule with a heat shield below and a

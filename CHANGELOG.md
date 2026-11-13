@@ -58,6 +58,9 @@
   drop box.
 - BuildsApi version 3 adds `PictureOf` and `PictureFile`: the library's picture of a design, for other
   mods to show.
+- Fixed: after the end of a KRASH sim, or Revert to the VAB in some cases, Save treated a filed craft as a
+  new design. Coming back to the editor with the same craft, Save now works exactly as before you left. A
+  craft launched from the launch pad's craft list and reverted saves into its own family too.
 
 ## 0.1.0 (2026-11-07)
 

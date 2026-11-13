@@ -48,6 +48,7 @@ namespace PhilsBuilds
             window = new LibraryWindow(this);
             GameEvents.onEditorShipModified.Add(OnShipModified);
             GameEvents.onEditorLoad.Add(OnEditorLoad);
+            GameEvents.onGameSceneLoadRequested.Add(OnLeaving);
             StartCoroutine(Hook());
         }
 
@@ -56,6 +57,7 @@ namespace PhilsBuilds
             if (Instance == this) Instance = null;
             GameEvents.onEditorShipModified.Remove(OnShipModified);
             GameEvents.onEditorLoad.Remove(OnEditorLoad);
+            GameEvents.onGameSceneLoadRequested.Remove(OnLeaving);
             dialog?.Close();
             window?.Close();
             if (Stock.Editor != null && Stock.Editor.shipNameField != null) Stock.Editor.shipNameField.onValueChanged.RemoveListener(OnNameChanged);
@@ -72,9 +74,50 @@ namespace PhilsBuilds
             Stock.ShutSaveFolders();
             if (Stock.Editor.shipNameField != null) Stock.Editor.shipNameField.onValueChanged.AddListener(OnNameChanged);
             hooked = true;
-            // Opening on a craft from a family folder (Revert, a scene change): saves go back there.
-            AdoptFolder(EditorDriver.filePathToLoad);
+            OpeningFolder();
             Debug.Log("[PhilsBuilds] Ready: Load opens the library.");
+        }
+
+        // Where saves were going as the editor last closed, and on which craft.
+        static string leftSave, leftFolder, leftShip;
+
+        void OnLeaving(GameScenes to)
+        {
+            bool ok = hooked && Stock.Editor != null;
+            leftSave = ok ? HighLogic.SaveFolder : null;
+            leftFolder = ok ? Stock.SaveFolder : null;
+            leftShip = ok ? Stock.ShipName : null;
+        }
+
+        // Where saves go as the editor opens (S9, 2026-11-13). Phil: coming back to the editor
+        // with the same craft (Revert to the editor, the end of a KRASH sim, back in from the
+        // space center: KSP's cached craft), Save treats it exactly as before you left. A craft
+        // opened from a file saves to that file's folder (AdoptFolder), and so does one that
+        // was launched from a filed craft file (the launch pad's own craft list, then Revert).
+        // Anything else, a new craft or a different one, saves to the building's own folder.
+        void OpeningFolder()
+        {
+            var how = EditorDriver.StartupBehaviour;
+            if (how == EditorDriver.StartupBehaviours.LOAD_FROM_FILE) { AdoptFolder(EditorDriver.filePathToLoad); return; }
+            string folder = Library.ShipsDir(Stock.Facility), why = "";
+            if (how == EditorDriver.StartupBehaviours.LOAD_FROM_CACHE)
+            {
+                if (leftShip != null && leftSave == HighLogic.SaveFolder && Naming.SameName(leftShip, Stock.ShipName) &&
+                    Directory.Exists(leftFolder) && Library.InShips(leftFolder) != null)
+                { folder = leftFolder; why = ", the craft it closed on"; }
+                else if (LaunchedFrom() is CraftFile c)
+                { folder = Path.GetDirectoryName(c.Path); why = ", launched from " + c.Path; }
+            }
+            Stock.SetSaveFolder(folder);
+            Debug.Log($"[PhilsBuilds] Editor opened ({how}{why}): saves go to {Stock.SaveFolder}");
+        }
+
+        // The filed craft file KSP last launched, when it's the craft open now.
+        static CraftFile LaunchedFrom()
+        {
+            string path = FlightDriver.newShipToLoadPath;
+            if (string.IsNullOrEmpty(path) || !File.Exists(path)) return null;
+            return Library.CraftAt(path) is CraftFile c && c.Filed && Naming.SameName(c.Name, KSPUtil.SanitizeString(Stock.ShipName, '_', true)) ? c : null;
         }
 
         void HookButtons()
